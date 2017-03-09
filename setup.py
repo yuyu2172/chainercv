@@ -18,4 +18,5 @@ setup(
     description=description,
     install_requires=open('requirements.txt').readlines(),
     include_package_data=True,
+    data_files=[('something', ['chainercv/datasets/cub/configs/test_images.npy'])]
 )
