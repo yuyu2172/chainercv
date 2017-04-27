@@ -24,7 +24,6 @@ def _create_array_from_directory(base_path):
             dir_name = os.path.join(base_path, mode)
             label_dir = os.path.join(base_path, mode + 'annot')
             for fn in os.listdir(dir_name):
-                print fn
                 img = utils.read_image_as_array(
                     os.path.join(dir_name, fn), dtype=np.float32, force_color=True)
                 imgs.append(img)
@@ -61,8 +60,3 @@ class CamVidDataset(chainer.datasets.TupleDataset):
 
         super(CamVidDataset, self).__init__(
             raw[mode + '_img'], raw[mode + '_label'])
-
-
-if __name__ == '__main__':
-    base_path = '/home/leus/playground/SegNet-Tutorial/CamVid/'
-    dataset = CamVidDataset(base_path=base_path)
