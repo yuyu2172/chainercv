@@ -118,7 +118,7 @@ def main():
          'main/loss', 'validation/main/loss',
          'main/accuracy', 'validation/main/accuracy',
          'main/accuracy_cls', 'validation/main/accuracy_cls',
-         'main/iu', 'validation/main/iu',
+         'main/miu', 'validation/main/miu',
          'main/fwavacc', 'validation/main/fwavacc']),
         trigger=log_interval)
     trainer.extend(extensions.ProgressBar(update_interval=10))
@@ -141,7 +141,7 @@ def main():
     )
     trainer.extend(
         extensions.PlotReport(
-            ['main/iu', 'validation/main/iu'],
+            ['main/miu', 'validation/main/miu'],
             trigger=plot_interval, file_name='iu.png')
     )
     trainer.extend(

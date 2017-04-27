@@ -1,14 +1,11 @@
 # Copyright (c) 2016 Shunta Saito
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 from chainer import cuda
 from chainer import reporter
-# from models.softmax_cross_entropy import softmax_cross_entropy
 from chainer.functions import softmax_cross_entropy
 from chainer.functions.pooling.upsampling_2d import upsampling_2d
+
+from chainercv.evaluations import eval_semantic_segmentation
 
 import chainer
 import chainer.functions as F
@@ -58,11 +55,11 @@ class SegNet(chainer.Chain):
     optimize each part (Encoder-Decoder pair or conv_cls) of SegNet.
     """
 
-    def __init__(self, n_encdec=4, n_classes=12, in_channel=3, n_mid=64):
+    def __init__(self, n_encdec=4, n_class=12, in_channel=3, n_mid=64):
         assert n_encdec >= 1
         w = math.sqrt(2)
         super(SegNet, self).__init__(
-            conv_cls=L.Convolution2D(n_mid, n_classes, 1, 1, 0, w))
+            conv_cls=L.Convolution2D(n_mid, n_class, 1, 1, 0, w))
 
         # Create and add EncDecs
         for i in six.moves.range(1, n_encdec + 1):
@@ -74,7 +71,7 @@ class SegNet(chainer.Chain):
             setattr(self, 'encdec{}'.format(d), encdec)
 
         self.n_encdec = n_encdec
-        self.n_classes = n_classes
+        self.n_class = n_class
         self.train = True
 
     def is_registered_link(self, name):
@@ -110,21 +107,33 @@ class SegNetLoss(chainer.Chain):
     def __init__(self, model, class_weight=None, train_depth=1):
         super(SegNetLoss, self).__init__(predictor=model)
         if class_weight is not None:
-            assert len(class_weight) == model.n_classes
+            assert len(class_weight) == model.n_class
         self.class_weight = class_weight
         self.train_depth = train_depth
 
     def __call__(self, x, t):
-        self.y = self.predictor(x, self.train_depth)
-        if hasattr(self, 'class_weight'):
-            if isinstance(x.data, cuda.cupy.ndarray) \
-                    and not isinstance(self.class_weight, cuda.cupy.ndarray):
-                self.class_weight = cuda.to_gpu(
-                    self.class_weight, device=x.data.device)
-            self.loss = softmax_cross_entropy(
-                self.y, t[:, 0, :, :], class_weight=self.class_weight)
-        else:
-            self.loss = F.softmax_cross_entropy(
-                self.y, t[:, 0, :, :], class_weight=self.class_weight)
+        y = self.predictor(x, self.train_depth)
+
+        device = chainer.cuda.get_device(y.data)
+        if device.id >= 0:
+            self.class_weight = cuda.to_gpu(self.class_weight, device=device)
+
+        self.loss = softmax_cross_entropy(
+            y, t[:, 0, :, :], class_weight=self.class_weight)
+
+        # evaluate for logging
+        if isinstance(t, chainer.Variable):
+            t = t.data
+        y = chainer.cuda.to_cpu(y.data)
+        t = chainer.cuda.to_cpu(t)
+        y = np.argmax(y, axis=1)[:, None]
+        acc, acc_cls, miu, fwavacc = eval_semantic_segmentation(
+            y, t, self.predictor.n_class)
+
         reporter.report({'loss': self.loss}, self)
+        reporter.report({'accuracy': np.mean(acc)}, self)
+        reporter.report({'accuracy_cls': np.mean(acc_cls)}, self)
+        reporter.report({'miu': np.mean(miu)}, self)
+        reporter.report({'fwavacc': np.mean(fwavacc)}, self)
+
         return self.loss
