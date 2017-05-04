@@ -14,7 +14,6 @@ import numpy as np
 from bbox_transform import bbox_transform
 
 from bbox import bbox_overlaps
-from bbox_transform import get_bbox_regression_label
 
 import chainer
 from chainer import cuda
@@ -190,6 +189,30 @@ class ProposalTargetLayer(object):
                             ) / np.array(self.bbox_normalize_std))
 
         bbox_target_sample, bbox_inside_weight = \
-            get_bbox_regression_label(
+            _get_bbox_regression_label(
                 bbox_sample, label_sample, n_class, self.bbox_inside_weight)
         return label_sample, roi_sample, bbox_target_sample, bbox_inside_weight
+
+
+def _get_bbox_regression_label(bbox, label, n_class, bbox_inside_weight_coeff):
+    """Bounding-box regression targets (bbox_target_data) are stored in a
+    compact form N x (class, tx, ty, tw, th)
+    This function expands those targets into the 4-of-4*K representation
+    used by the network (i.e. only one class has non-zero targets).
+
+    Returns:
+        bbox_target (ndarray): N x 4K blob of regression targets
+        bbox_inside_weights (ndarray): N x 4K blob of loss weights
+
+    """
+    n_bbox = label.shape[0]
+    bbox_target = np.zeros((n_bbox, 4 * n_class), dtype=np.float32)
+    bbox_inside_weight = np.zeros_like(bbox_target)
+    inds = np.where(label > 0)[0]
+    for ind in inds:
+        cls = int(label[ind])
+        start = int(4 * cls)
+        end = int(start + 4)
+        bbox_target[ind, start:end] = bbox[ind]
+        bbox_inside_weight[ind, start:end] = bbox_inside_weight_coeff
+    return bbox_target, bbox_inside_weight

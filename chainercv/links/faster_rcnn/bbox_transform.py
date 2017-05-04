@@ -88,27 +88,3 @@ def clip_boxes(boxes, img_size):
     # y2 < im_shape[0]
     boxes[:, 3::4] = xp.maximum(xp.minimum(boxes[:, 3::4], H - 1), 0)
     return boxes
-
-
-def get_bbox_regression_label(bbox, label, n_class, bbox_inside_weight_coeff):
-    """Bounding-box regression targets (bbox_target_data) are stored in a
-    compact form N x (class, tx, ty, tw, th)
-    This function expands those targets into the 4-of-4*K representation
-    used by the network (i.e. only one class has non-zero targets).
-
-    Returns:
-        bbox_target (ndarray): N x 4K blob of regression targets
-        bbox_inside_weights (ndarray): N x 4K blob of loss weights
-
-    """
-    n_bbox = label.shape[0]
-    bbox_target = np.zeros((n_bbox, 4 * n_class), dtype=np.float32)
-    bbox_inside_weight = np.zeros_like(bbox_target)
-    inds = np.where(label > 0)[0]
-    for ind in inds:
-        cls = int(label[ind])
-        start = int(4 * cls)
-        end = int(start + 4)
-        bbox_target[ind, start:end] = bbox[ind]
-        bbox_inside_weight[ind, start:end] = bbox_inside_weight_coeff
-    return bbox_target, bbox_inside_weight
