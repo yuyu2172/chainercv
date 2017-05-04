@@ -12,11 +12,10 @@
 import numpy as np
 
 from chainer import cuda
-from chainer.cuda import get_array_module
 
 
 def bbox_transform(ex_rois, gt_rois):
-    xp = get_array_module(ex_rois)
+    xp = cuda.get_array_module(ex_rois)
 
     ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
     ex_heights = ex_rois[:, 3] - ex_rois[:, 1] + 1.0
@@ -39,7 +38,7 @@ def bbox_transform(ex_rois, gt_rois):
 
 
 def bbox_transform_inv(boxes, deltas):
-    xp = get_array_module(boxes)
+    xp = cuda.get_array_module(boxes)
 
     if boxes.shape[0] == 0:
         return xp.zeros((0, deltas.shape[1]), dtype=deltas.dtype)
