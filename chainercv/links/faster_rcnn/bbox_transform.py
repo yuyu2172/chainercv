@@ -90,23 +90,6 @@ def clip_boxes(boxes, img_size):
     return boxes
 
 
-def keep_inside(anchor, W, H):
-    """Calc indicies of anchors which are inside of the image size.
-
-    Calc indicies of anchors which are located completely inside of the image
-    whose size is speficied by img_info ((height, width, scale)-shaped array).
-    """
-    xp = cuda.get_array_module(anchor)
-
-    index_inside = xp.where(
-        (anchor[:, 0] >= 0) &
-        (anchor[:, 1] >= 0) &
-        (anchor[:, 2] < W) &  # width
-        (anchor[:, 3] < H)  # height
-    )[0]
-    return index_inside, anchor[index_inside]
-
-
 def get_bbox_regression_label(bbox, label, n_class, bbox_inside_weight_coeff):
     """Bounding-box regression targets (bbox_target_data) are stored in a
     compact form N x (class, tx, ty, tw, th)

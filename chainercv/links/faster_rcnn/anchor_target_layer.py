@@ -14,7 +14,6 @@ import numpy as np
 
 from bbox import bbox_overlaps
 from bbox_transform import bbox_transform
-from bbox_transform import keep_inside
 
 import chainer
 from chainer import cuda
@@ -68,7 +67,7 @@ class AnchorTargetLayer(object):
         img_W, img_H = img_size
 
         n_anchor = len(anchor)
-        inds_inside, anchor = keep_inside(anchor, img_W, img_H)
+        inds_inside, anchor = _keep_inside(anchor, img_W, img_H)
         argmax_overlaps, label = self._create_label(
             inds_inside, anchor, bbox)
 
@@ -191,3 +190,20 @@ def _unmap(data, count, inds, fill=0):
         ret.fill(fill)
         ret[inds, :] = data
     return ret
+
+
+def _keep_inside(anchor, W, H):
+    """Calc indicies of anchors which are inside of the image size.
+
+    Calc indicies of anchors which are located completely inside of the image
+    whose size is speficied by img_info ((height, width, scale)-shaped array).
+    """
+    xp = cuda.get_array_module(anchor)
+
+    index_inside = xp.where(
+        (anchor[:, 0] >= 0) &
+        (anchor[:, 1] >= 0) &
+        (anchor[:, 2] < W) &  # width
+        (anchor[:, 3] < H)  # height
+    )[0]
+    return index_inside, anchor[index_inside]
