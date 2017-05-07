@@ -48,7 +48,7 @@ def generate_anchors(base_size=16, ratios=[0.5, 1, 2],
     scales wrt a reference (0, 0, 15, 15) window.
     """
 
-    base_anchor = np.array([1, 1, base_size, base_size]) - 1
+    base_anchor = np.array([0, 0, base_size, base_size])
     ratio_anchors = _ratio_enum(base_anchor, ratios)
     anchors = np.vstack([_scale_enum(ratio_anchors[i, :], scales)
                          for i in six.moves.range(ratio_anchors.shape[0])])
@@ -60,10 +60,10 @@ def _whctrs(anchor):
     Return width, height, x center, and y center for an anchor (window).
     """
 
-    w = anchor[2] - anchor[0] + 1
-    h = anchor[3] - anchor[1] + 1
-    x_ctr = anchor[0] + 0.5 * (w - 1)
-    y_ctr = anchor[1] + 0.5 * (h - 1)
+    w = anchor[2] - anchor[0]
+    h = anchor[3] - anchor[1]
+    x_ctr = anchor[0] + 0.5 * w
+    y_ctr = anchor[1] + 0.5 * h
     return w, h, x_ctr, y_ctr
 
 
@@ -75,10 +75,10 @@ def _mkanchors(ws, hs, x_ctr, y_ctr):
 
     ws = ws[:, np.newaxis]
     hs = hs[:, np.newaxis]
-    anchors = np.hstack((x_ctr - 0.5 * (ws - 1),
-                         y_ctr - 0.5 * (hs - 1),
-                         x_ctr + 0.5 * (ws - 1),
-                         y_ctr + 0.5 * (hs - 1)))
+    anchors = np.hstack((x_ctr - 0.5 * (ws),
+                         y_ctr - 0.5 * (hs),
+                         x_ctr + 0.5 * (ws),
+                         y_ctr + 0.5 * (hs)))
     return anchors
 
 

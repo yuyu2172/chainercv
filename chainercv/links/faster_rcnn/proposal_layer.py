@@ -90,8 +90,8 @@ class ProposalLayer(object):
 
         # 3. remove predicted boxes with either height or width < threshold
         min_size = self.rpn_min_size * scale
-        ws = proposal[:, 2] - proposal[:, 0] + 1
-        hs = proposal[:, 3] - proposal[:, 1] + 1
+        ws = proposal[:, 2] - proposal[:, 0]
+        hs = proposal[:, 3] - proposal[:, 1]
         keep = np.where((ws >= min_size) & (hs >= min_size))[0]
         proposal = proposal[keep, :]
         score = score[keep]

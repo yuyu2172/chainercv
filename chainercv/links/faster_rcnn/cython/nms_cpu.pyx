@@ -23,7 +23,7 @@ def nms_cpu(np.ndarray[np.float32_t, ndim=2] dets, np.float thresh):
     cdef np.ndarray[np.float32_t, ndim=1] y2 = dets[:, 3]
     cdef np.ndarray[np.float32_t, ndim=1] scores = dets[:, 4]
 
-    cdef np.ndarray[np.float32_t, ndim=1] areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    cdef np.ndarray[np.float32_t, ndim=1] areas = (x2 - x1) * (y2 - y1 )
     cdef np.ndarray[np.int_t, ndim=1] order = scores.argsort()[::-1]
 
     cdef int ndets = dets.shape[0]
@@ -60,8 +60,8 @@ def nms_cpu(np.ndarray[np.float32_t, ndim=2] dets, np.float thresh):
             yy1 = max(iy1, y1[j])
             xx2 = min(ix2, x2[j])
             yy2 = min(iy2, y2[j])
-            w = max(0.0, xx2 - xx1 + 1)
-            h = max(0.0, yy2 - yy1 + 1)
+            w = max(0.0, xx2 - xx1)
+            h = max(0.0, yy2 - yy1)
             inter = w * h
             ovr = inter / (iarea + areas[j] - inter)
             if ovr >= thresh:
