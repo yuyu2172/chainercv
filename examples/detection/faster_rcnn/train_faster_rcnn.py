@@ -22,7 +22,8 @@ from chainer_tools.extensions.visdom_report import VisdomReport
 from chainercv.datasets.pascal_voc.voc_utils import pascal_voc_labels
 
 from chainer.training.triggers.manual_schedule_trigger import ManualScheduleTrigger
-from traffic_camera.extensions.detection_report import DetectionReport
+
+from detection_report import DetectionReport
 
 
 class TestModeEvaluator(extensions.Evaluator):
