@@ -68,6 +68,8 @@ def _record_bbox(model, dataset, device, n_class, post_transform=_identity):
         pred_bbox = chainer.cuda.to_cpu(pred_bbox)[0]  # (N, 4)
         pred_label = chainer.cuda.to_cpu(pred_label)[0]  # (N,)
         pred_confidence = chainer.cuda.to_cpu(pred_confidence)[0]  # (N,)
+        pred_bbox[:, 1] += 1
+        pred_bbox[:, 3] += 1
 
         bboxes.append(pred_bbox)
         labels.append(pred_label)

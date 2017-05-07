@@ -18,7 +18,7 @@ from chainer.links.model.vision.vgg import VGG16Layers
 
 from chainercv.links.faster_rcnn.bbox_transform import bbox_transform_inv
 from chainercv.links.faster_rcnn.bbox_transform import clip_boxes
-from chainercv.links.faster_rcnn.nms_cpu import nms_cpu as nms
+from chainercv.links.faster_rcnn.nms_gpu import nms_gpu as nms
 
 from chainercv.links.faster_rcnn.region_proposal_network import\
     RegionProposalNetwork

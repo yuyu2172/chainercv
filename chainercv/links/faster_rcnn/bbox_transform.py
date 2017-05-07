@@ -75,7 +75,7 @@ def bbox_transform_inv(boxes, deltas):
 
 def clip_boxes(boxes, img_size):
     """Clip boxes to image boundaries."""
-    xp = get_array_module(boxes)
+    xp = cuda.get_array_module(boxes)
     W, H = img_size
 
     # x1 >= 0
