@@ -1,4 +1,5 @@
 from chainercv.links.model.faster_rcnn.faster_rcnn import FasterRCNNBase  # NOQA
+from chainercv.links.model.faster_rcnn.faster_rcnn_loss import FasterRCNNLoss  # NOQA
 from chainercv.links.model.faster_rcnn.faster_rcnn_vgg import FasterRCNNVGG16  # NOQA
 from chainercv.links.model.faster_rcnn.region_proposal_network import RegionProposalNetwork  # NOQA
 from chainercv.links.model.faster_rcnn.utils.anchor_target_creator import AnchorTargetCreator  # NOQA
