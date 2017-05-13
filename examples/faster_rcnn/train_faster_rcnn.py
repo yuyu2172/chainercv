@@ -1,6 +1,6 @@
 import matplotlib
 matplotlib.use('agg')
-import fire
+import argparse
 import numpy as np
 
 import chainer
@@ -19,16 +19,6 @@ from chainercv.datasets.pascal_voc.voc_utils import pascal_voc_labels
 
 from chainer.training.triggers.manual_schedule_trigger import ManualScheduleTrigger
 from detection_report import DetectionReport
-
-
-class TestModeEvaluator(extensions.Evaluator):
-
-    def evaluate(self):
-        model = self.get_target('main')
-        model.train = False
-        ret = super(TestModeEvaluator, self).evaluate()
-        model.train = True
-        return ret
 
 
 mean_pixel = np.array([102.9801, 115.9465, 122.7717])[:, None, None]
@@ -56,22 +46,27 @@ def get_updater(train_iter, optimizer, device):
     return updater
 
 
-def main(gpus=[0, 1, 2], model_mode='vgg',
-         lr=1e-3, gamma=0.1,
-         out='result', resume='', seed=0,
-         roi_batchsize=128,
-         ):
-    for key, val in locals().items():
-        print('{}: {}'.format(key, val))
-    batch_size = 1
-    if not isinstance(gpus, list or tuple):
-        gpus = [gpus]
-    lr = lr / float(len(gpus))  # adjust lr
+def main():
+    parser = argparse.ArgumentParser(
+        description='ChainerCV example: Faster RCNN')
+    parser.add_argument('--gpu', '-g', type=int, default=-1)
+    parser.add_argument('--lr', '-l', type=float, default=1e-3)
+    parser.add_argument('--out', '-o', default='result',
+                        help='Output directory')
+    parser.add_argument('--seed', '-s', default=0)
+    parser.add_argument('--step_size', '-ss', default=50000)
+    parser.add_argument('--iteration', '-i', default=70000)
+    args = parser.parse_args()
+
+    gpu = args.gpu
+    lr = args.lr
+    out = args.out
+    seed = args.seed
+    step_size = args.step_size
+    iteration = args.iteration
 
     np.random.seed(seed)
 
-    iteration = 70000
-    step_size = 50000
     labels = pascal_voc_labels
     train_data = VOCDetectionDataset(mode='trainval', year='2007')
     test_data = VOCDetectionDataset(
@@ -79,6 +74,8 @@ def main(gpus=[0, 1, 2], model_mode='vgg',
         use_difficult=True, return_difficult=True)
 
     def get_transform(use_random):
+        min_size = 600
+        max_size = 1000
         def transform(in_data):
             has_difficult = len(in_data) == 4
             img, bbox, label = in_data[:3]
@@ -86,21 +83,21 @@ def main(gpus=[0, 1, 2], model_mode='vgg',
             # Resize bounding box to a shape
             # with the smaller edge at least at length 600
             _, H, W = img.shape
-            img = transforms.scale(img, 600)
-            _, o_H, o_W = img.shape
-            # Prevent the biggest axis from being more than MAX_SIZE
-            if max(o_H, o_W) > 1000:
-                rate = 1000 / float(max(o_H, o_W))
-                img = transforms.resize(img, (int(o_W * rate), int(o_H * rate)))
-                _, o_H, o_W = img.shape
+            scale = 1.
+            if min(H, W) < min_size:
+                scale = min_size / min(H, W)
+
+            if scale * max(H, W) > max_size:
+                scale = max(H, W) * scale / max_size
+
+            o_W, o_H = int(W * scale), int(H * scale)
+            img = transforms.resize(img, (o_W, o_H))
             bbox = transforms.resize_bbox(bbox, (W, H), (o_W, o_H))
 
             # horizontally flip
             if use_random:
                 img, params = transforms.random_flip(img, x_random=True, return_param=True)
                 bbox = transforms.flip_bbox(bbox, (o_W, o_H), params['x_flip'])
-
-            scale = float(o_W) / float(W)
 
             if has_difficult:
                 return img, bbox, label, scale, in_data[-1]
@@ -110,43 +107,31 @@ def main(gpus=[0, 1, 2], model_mode='vgg',
     train_data = TransformDataset(train_data, get_transform(True))
     test_data = TransformDataset(test_data, get_transform(False))
 
-    proposal_target_creator_params = {'batch_size': roi_batchsize}
-    if model_mode == 'vgg':
-        model = FasterRCNNLoss(
-            FasterRCNNVGG16(n_class=len(labels), conf_thresh=0.05),
-            proposal_target_creator_params=proposal_target_creator_params)
-        weight_decay = 0.0005
-    elif model_mode == 'resnet':
-        model = FasterRCNNLoss(
-            FasterRCNNResNet(n_class=len(labels), conf_thresh=0.05),
-            proposal_target_layer_params=proposal_target_layer_params)
-        weight_decay = 0.0001
+    model = FasterRCNNLoss(
+        FasterRCNNVGG16(n_class=len(labels), score_thresh=0.05)
+    )
 
-    if len(gpus) == 1:
-        model.to_gpu(gpus[0])
-        chainer.cuda.get_device(gpus[0]).use()
+    if gpu >= 0:
+        model.to_gpu(gpu)
+        chainer.cuda.get_device(gpu).use()
     optimizer = chainer.optimizers.MomentumSGD(lr=lr, momentum=0.9)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(rate=weight_decay))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(rate=0.0005))
 
-    train_iter = get_train_iter(gpus, train_data, batch_size)
-    test_iter = chainer.iterators.MultiprocessIterator(
-        test_data, batch_size=1, repeat=False, shared_mem=10000000)
-    updater = get_updater(train_iter, optimizer, gpus)
+    train_iter = chainer.iterators.MultiprocessIterator(
+        train_data, batch_size=1, n_processes=None, shared_mem=100000000)
+    updater = chainer.training.updater.StandardUpdater(
+        train_iter, optimizer, device=gpu)
 
     trainer = training.Trainer(updater, (iteration, 'iteration'), out=out)
 
-    # only save the lastest model
-    import datetime
-    fn = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S").replace(' ', '_')
-    trainer.extend(extensions.snapshot(filename='snapshot'+fn), trigger=(1, 'epoch'))
     trainer.extend(extensions.snapshot_object(
-        model.faster_rcnn, 'model' + fn), trigger=(1, 'epoch'))
-    trainer.extend(extensions.ExponentialShift('lr', gamma),
+        model.faster_rcnn, 'model'), trigger=(iteration, 'iteration'))
+    trainer.extend(extensions.ExponentialShift('lr', 0.1),
                    trigger=(step_size, 'iteration'))
 
     log_interval = 20, 'iteration'
-    val_interval = 70000, 'iteration'
+    val_interval = iteration, 'iteration'
     plot_interval = 3000, 'iteration'
     print_interval = 20, 'iteration'
 
@@ -203,62 +188,6 @@ def main(gpus=[0, 1, 2], model_mode='vgg',
             ),
             trigger=plot_interval
         )
-        trainer.extend(
-            extensions.PlotReport(
-                ['main/map'],
-                file_name='map.png'
-            ),
-            trigger=val_interval
-        )
-
-    # def vis_transform(in_data):
-    #     img, bbox, label, scale = in_data
-    #     img += mean_pixel
-    #     img = transforms.chw_to_pil_image(img)
-    #     return img, bbox, label
-
-    # trainer.extend(
-    #     DetectionVisReport(
-    #         range(10),  # visualize outputs for the first 10 data of train_data
-    #         train_data,
-    #         model,
-    #         filename_base='detection_train',
-    #         predict_func=model.predict_bbox,
-    #         vis_transform=vis_transform
-    #     ),
-    #     trigger=val_interval, invoke_before_training=True
-    # )
-    # trainer.extend(
-    #     DetectionVisReport(
-    #         range(10),  # visualize outputs for the first 10 data of 
-    #         test_data,
-    #         model,
-    #         filename_base='detection_test',
-    #         predict_func=model.predict_bbox,
-    #         vis_transform=vis_transform
-    #     ),
-    #     trigger=val_interval, invoke_before_training=True
-    # )
-    # trainer.extend(
-    #     VisdomReport(
-    #         train_iter,
-    #         vis_pred_bbox(model, labels),
-    #         env_name_suffix='train_',
-    #         pass_vis=True
-    #     ), trigger=val_interval
-    # )
-    # trainer.extend(
-    #     VisdomReport(
-    #         test_iter,
-    #         vis_pred_bbox(model, labels),
-    #         device=gpus[0],
-    #         env_name_suffix='test_',
-    #         pass_vis=True,
-    #     ), trigger=val_interval, invoke_before_training=False
-    # )
-
-    # trainer.extend(TestModeEvaluator(test_iter, model, device=gpus[0]),
-    #                trigger=val_interval)
 
     def post_transform(in_data):
         img, bbox, label, scale, difficult = in_data
@@ -267,24 +196,18 @@ def main(gpus=[0, 1, 2], model_mode='vgg',
         o_H = int(H / scale)
         bbox = transforms.resize_bbox(bbox, (W, H), (o_W, o_H))
         return img, bbox, label, scale, difficult
-        
-    use_07_metric = True
+
     trainer.extend(
         DetectionReport(
-            model.faster_rcnn, test_data,gpus[0], len(labels), minoverlap=0.5,
-            use_07_metric=use_07_metric, post_transform=post_transform),
+            model.faster_rcnn, test_data, gpu, len(labels), minoverlap=0.5,
+            use_07_metric=True, post_transform=post_transform),
         trigger=val_interval, invoke_before_training=False
-
     )
 
     trainer.extend(extensions.dump_graph('main/loss'))
-
-    if resume:
-        # Resume from a snapshot
-        chainer.serializers.load_npz(resume, trainer)
 
     trainer.run()
 
 
 if __name__ == '__main__':
-    fire.Fire(main)
+    main()
