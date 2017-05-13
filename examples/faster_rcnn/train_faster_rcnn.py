@@ -12,7 +12,7 @@ from chainercv.datasets import TransformDataset
 from chainercv.datasets import VOCDetectionDataset
 from chainercv import transforms
 
-from chainercv.links import FasterRCNNVGG
+from chainercv.links import FasterRCNNVGG16
 from chainercv.links import FasterRCNNLoss
 
 from chainercv.datasets.pascal_voc.voc_utils import pascal_voc_labels
@@ -113,7 +113,7 @@ def main(gpus=[0, 1, 2], model_mode='vgg',
     proposal_target_creator_params = {'batch_size': roi_batchsize}
     if model_mode == 'vgg':
         model = FasterRCNNLoss(
-            FasterRCNNVGG(n_class=len(labels), conf_thresh=0.05),
+            FasterRCNNVGG16(n_class=len(labels), conf_thresh=0.05),
             proposal_target_creator_params=proposal_target_creator_params)
         weight_decay = 0.0005
     elif model_mode == 'resnet':
