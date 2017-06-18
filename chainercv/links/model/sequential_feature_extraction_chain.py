@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 
 import chainer
 from chainer import cuda
@@ -10,9 +11,8 @@ from chainercv.transforms import scale
 
 class SequentialFeatureExtractionChain(chainer.Chain):
 
-    def __init__(self, feature_names, default_functions, link_generators,
+    def __init__(self, feature_names, link_generators,
                  mean, do_ten_crop=False):
-        self._default_functions = default_functions
         self.mean = mean
         self.do_ten_crop = do_ten_crop
 
@@ -27,21 +27,17 @@ class SequentialFeatureExtractionChain(chainer.Chain):
 
         super(SequentialFeatureExtractionChain, self).__init__()
 
+        unused_functions =\
+            set(self.default_functions.keys()) - set(self.functions.keys())
         with self.init_scope():
             for name, link_gen in link_generators.items():
-                if name not in self.unused_functions:
+                # Ignore layers whose names match functions that are removed.
+                if name not in unused_functions:
                     setattr(self, name, link_gen())
 
     @property
     def functions(self):
-        _functions = copy.copy(self._default_functions)
-        for unused_function in self.unused_functions:
-            _functions.pop(unused_function)
-        return _functions
-
-    @property
-    def unused_functions(self):
-        if any([name not in self._default_functions for
+        if any([name not in self.default_functions for
                 name in self._feature_names]):
             raise ValueError('Elements of `features` shuold be one of '
                              '{}.'.format(funcs.keys()))
@@ -49,16 +45,20 @@ class SequentialFeatureExtractionChain(chainer.Chain):
         # Remove all functions that are not necessary.
         pop_funcs = False
         features = list(self._feature_names)
-        _unused_functions = []
-        for name in list(self._default_functions.keys()):
+        _functions = copy.copy(self.default_functions)
+        for name in list(self.default_functions.keys()):
             if pop_funcs:
-                _unused_functions.append(name)
+                _functions.pop(name)
 
             if name in features:
                 features.remove(name)
             if len(features) == 0:
                 pop_funcs = True
-        return _unused_functions
+        return _functions
+
+    @property
+    def default_functions(self):
+        raise NotImplementedError
 
     def __call__(self, x):
         """Forward VGG16.
@@ -101,7 +101,12 @@ class SequentialFeatureExtractionChain(chainer.Chain):
 
         """
         img = scale(img, size=256)
-        img = img - self.mean
+        if self.do_ten_crop:
+            img = ten_crop(img, (224, 224))
+            img -= self.mean[np.newaxis]
+        else:
+            img = center_crop(img, (224, 224))
+            img -= self.mean
 
         return img
 
@@ -145,10 +150,6 @@ class SequentialFeatureExtractionChain(chainer.Chain):
 
         """
         imgs = [self._prepare(img) for img in imgs]
-        if self.do_ten_crop:
-            imgs = [ten_crop(img, (224, 224)) for img in imgs]
-        else:
-            imgs = [center_crop(img, (224, 224)) for img in imgs]
         imgs = self.xp.asarray(imgs).reshape(-1, 3, 224, 224)
 
         with chainer.function.no_backprop_mode():

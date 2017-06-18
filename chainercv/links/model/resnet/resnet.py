@@ -21,18 +21,6 @@ class ResNet(SequentialFeatureExtractionChain):
         def _getattr(name):
             return getattr(self, name, None)
 
-        default_functions = collections.OrderedDict([
-            ('conv1', [_getattr('conv1'), _getattr('bn1'), F.relu]),
-            ('pool1', [lambda x: F.max_pooling_2d(x, ksize=3, stride=2)]),
-            ('res2', [_getattr('res2')]),
-            ('res3', [_getattr('res3')]),
-            ('res4', [_getattr('res4')]),
-            ('res5', [_getattr('res5')]),
-            ('pool5', [_global_average_pooling_2d]),
-            ('fc6', [_getattr('fc6')]),
-            ('prob', [F.softmax]),
-        ])
-
         kwargs = {'initialW': initialW}
         link_generators = {
             'conv1': lambda: L.Convolution2D(3, 64, 7, 2, 3, **kwargs),
@@ -48,9 +36,26 @@ class ResNet(SequentialFeatureExtractionChain):
         }
 
         super(ResNet, self).__init__(
-            feature_names, default_functions,
+            feature_names,
             link_generators,
             mean, ten_crop)
+
+    @property
+    def default_functions(self):
+        def _getattr(name):
+            return getattr(self, name, None)
+
+        return collections.OrderedDict([
+            ('conv1', [_getattr('conv1'), _getattr('bn1'), F.relu]),
+            ('pool1', [lambda x: F.max_pooling_2d(x, ksize=3, stride=2)]),
+            ('res2', [_getattr('res2')]),
+            ('res3', [_getattr('res3')]),
+            ('res4', [_getattr('res4')]),
+            ('res5', [_getattr('res5')]),
+            ('pool5', [_global_average_pooling_2d]),
+            ('fc6', [_getattr('fc6')]),
+            ('prob', [F.softmax]),
+        ])
 
 
 def _global_average_pooling_2d(x):
