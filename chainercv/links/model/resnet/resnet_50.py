@@ -15,7 +15,6 @@ _imagenet_mean = np.array(
 class ResNet50(ResNet):
 
     _models = {}
-
     def __init__(self, pretrained_model=None, n_class=None,
                  features='prob', initialW=None,
                  mean=_imagenet_mean, do_ten_crop=False):

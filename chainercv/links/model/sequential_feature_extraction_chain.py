@@ -29,30 +29,36 @@ class SequentialFeatureExtractionChain(chainer.Chain):
 
         with self.init_scope():
             for name, link_gen in link_generators.items():
-                if name in self.functions:
+                if name not in self.unused_functions:
                     setattr(self, name, link_gen())
 
     @property
     def functions(self):
+        _functions = copy.copy(self._default_functions)
+        for unused_function in self.unused_functions:
+            _functions.pop(unused_function)
+        return _functions
 
-        funcs = copy.copy(self._default_functions)
-        if any([name not in funcs for name in self._feature_names]):
+    @property
+    def unused_functions(self):
+        if any([name not in self._default_functions for
+                name in self._feature_names]):
             raise ValueError('Elements of `features` shuold be one of '
                              '{}.'.format(funcs.keys()))
 
         # Remove all functions that are not necessary.
         pop_funcs = False
         features = list(self._feature_names)
-        for name in list(funcs.keys()):
+        _unused_functions = []
+        for name in list(self._default_functions.keys()):
             if pop_funcs:
-                funcs.pop(name)
+                _unused_functions.append(name)
 
             if name in features:
                 features.remove(name)
             if len(features) == 0:
                 pop_funcs = True
-
-        return funcs
+        return _unused_functions
 
     def __call__(self, x):
         """Forward VGG16.
