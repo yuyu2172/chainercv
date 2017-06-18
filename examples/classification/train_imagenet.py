@@ -33,7 +33,7 @@ def main():
     parser.add_argument('train', help='Path to root of the train dataset')
     parser.add_argument('val', help='Path to root of the validation dataset')
     parser.add_argument(
-        '--model', choices=('resnet50'))
+        '--model', choices=('resnet50',))
     parser.add_argument('--pretrained_model')
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--batchsize', type=int, default=32)
@@ -55,7 +55,7 @@ def main():
         n_processes=6, shared_mem=300000000)
 
     if args.model == 'resnet50':
-        model = ResNet50(pretrained_model=None, n_class=1000, feature='fc8')
+        model = ResNet50(pretrained_model=None, n_class=1000, feature_names='fc6')
 
     model = Classifier(model)
 

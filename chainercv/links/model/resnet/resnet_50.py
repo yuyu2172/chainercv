@@ -16,12 +16,12 @@ class ResNet50(ResNet):
 
     _models = {}
     def __init__(self, pretrained_model=None, n_class=None,
-                 features='prob', initialW=None,
+                 feature_names='prob', initialW=None,
                  mean=_imagenet_mean, do_ten_crop=False):
         if n_class is None:
             if (pretrained_model is None and
                     all([feature not in ['fc6', 'prob']
-                         for feature in features])):
+                         for feature in feature_names])):
                 # fc8 layer is not used in this case.
                 pass
             elif pretrained_model not in self._models:
@@ -41,7 +41,7 @@ class ResNet50(ResNet):
                 initialW = normal.HeNormal(scale=1.)
 
         super(ResNet50, self).__init__(
-            [3, 4, 6, 3], n_class, features, initialW, mean, do_ten_crop)
+            [3, 4, 6, 3], n_class, feature_names, initialW, mean, do_ten_crop)
 
         if pretrained_model in self._models:
             path = download_model(self._models[pretrained_model]['url'])
