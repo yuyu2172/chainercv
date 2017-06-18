@@ -37,7 +37,8 @@ def _transfer_block(src, dst, names):
         _transfer_bottleneckB(src, dst_bottleneckB, name)
 
 def _transfer_resnet50(src, dst):
-    dst.conv1.W.data[:] = src.conv1.W.data
+    # Reorder weights to work on RGB and not on BGR
+    dst.conv1.W.data[:] = src.conv1.W.data[:, ::-1]
     dst.conv1.b.data[:] = src.conv1.b.data
     dst.bn1.avg_mean[:] = src.bn_conv1.avg_mean
     dst.bn1.avg_var[:] = src.bn_conv1.avg_var

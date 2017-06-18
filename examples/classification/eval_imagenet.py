@@ -40,6 +40,7 @@ def main():
     parser.add_argument(
         '--model', choices=('vgg16', 'resnet50'))
     parser.add_argument('--pretrained_model')
+    parser.add_argument('--mean')
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--batchsize', type=int, default=32)
     args = parser.parse_args()
@@ -55,7 +56,9 @@ def main():
         else:
             model = VGG16Layers(pretrained_model='imagenet')
     if args.model == 'resnet50':
-        model = ResNet50(pretrained_model='imagenet')
+        model = ResNet50(pretrained_model=args.pretrained_model,
+                         n_class=1000,
+                         mean=np.load(args.mean))
 
     if args.gpu >= 0:
         chainer.cuda.get_device(args.gpu).use()

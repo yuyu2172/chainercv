@@ -38,7 +38,7 @@ class ResNet(SequentialFeatureExtractionChain):
         super(ResNet, self).__init__(
             feature_names,
             link_generators,
-            mean, ten_crop)
+            mean, do_ten_crop)
 
     @property
     def default_functions(self):
