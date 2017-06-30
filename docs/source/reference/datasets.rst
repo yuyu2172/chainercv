@@ -11,6 +11,13 @@ TransformDataset
 ~~~~~~~~~~~~~~~~
 .. autofunction:: TransformDataset
 
+BSDS500Dataset
+--------------
+
+BSDS500Dataset
+~~~~~~~~~~~~~~
+.. autofunction:: BSDS500Dataset
+
 CamVid
 ------
 
