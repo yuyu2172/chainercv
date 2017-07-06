@@ -10,6 +10,9 @@ from chainer import iterators
 
 from chainercv.datasets import DirectoryParsingClassificationDataset
 from chainercv.links import FeatureExtractionPredictor
+from chainercv.links import ResNet101
+from chainercv.links import ResNet152
+from chainercv.links import ResNet50
 from chainercv.links import VGG16
 
 from chainercv.utils import apply_prediction_to_iterator
@@ -49,12 +52,20 @@ def main():
         dataset, args.batchsize, repeat=False, shuffle=False,
         n_processes=6, shared_mem=300000000)
 
+    if args.pretrained_model:
+        pretrained_model = args.pretrained_model
+    else:
+        pretrained_model = 'imagenet'
+
     if args.model == 'vgg16':
-        if args.pretrained_model:
-            model = VGG16(pretrained_model=args.pretrained_model)
-        else:
-            model = VGG16(pretrained_model='imagenet')
-        model = FeatureExtractionPredictor(model)
+        model = VGG16(pretrained_model=pretrained_model)
+    elif args.model == 'resnet50':
+        model = ResNet50(pretrained_model=pretrained_model)
+    elif args.model == 'resnet101':
+        model = ResNet101(pretrained_model=pretrained_model)
+    elif args.model == 'resnet152':
+        model = ResNet152(pretrained_model=pretrained_model)
+    model = FeatureExtractionPredictor(model)
 
     if args.gpu >= 0:
         chainer.cuda.get_device(args.gpu).use()
