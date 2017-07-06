@@ -30,21 +30,24 @@ class ResNet(SequentialFeatureExtractor):
         'resnet50': {
             'imagenet': {
                 'n_class': 1000,
-                'url': 'a',
+                'url': 'https://github.com/yuyu2172/share-weights/releases/'
+                'download/0.0.3/resnet50_imagenet_convert_2017_07_06.npz',
                 'mean': _imagenet_mean
             },
         },
         'resnet101': {
             'imagenet': {
                 'n_class': 1000,
-                'url': 'b',
+                'url': 'https://github.com/yuyu2172/share-weights/releases/'
+                'download/0.0.3/resnet101_imagenet_convert_2017_07_06.npz',
                 'mean': _imagenet_mean
             },
         },
         'resnet152': {
             'imagenet': {
                 'n_class': 1000,
-                'url': 'c',
+                'url': 'https://github.com/yuyu2172/share-weights/releases/'
+                'download/0.0.3/resnet152_imagenet_convert_2017_07_06.npz',
                 'mean': _imagenet_mean
             },
         }
