@@ -3,6 +3,8 @@ import argparse
 import chainer
 from chainer.links.caffe.caffe_function import CaffeFunction
 
+from chainercv.links import ResNet101
+from chainercv.links import ResNet152
 from chainercv.links import ResNet50
 
 
@@ -36,6 +38,7 @@ def _transfer_block(src, dst, names):
         dst_bottleneckB = getattr(dst, 'b{}'.format(i + 1))
         _transfer_bottleneckB(src, dst_bottleneckB, name)
 
+
 def _transfer_resnet50(src, dst):
     # Reorder weights to work on RGB and not on BGR
     dst.conv1.W.data[:] = src.conv1.W.data[:, ::-1]
@@ -54,18 +57,62 @@ def _transfer_resnet50(src, dst):
     dst.fc6.b.data[:] = src.fc1000.b.data
 
 
+def _transfer_resnet101(src, dst):
+    dst.conv1.W.data[:] = src.conv1.W.data
+    dst.bn1.avg_mean[:] = src.bn_conv1.avg_mean
+    dst.bn1.avg_var[:] = src.bn_conv1.avg_var
+    dst.bn1.gamma.data[:] = src.scale_conv1.W.data
+    dst.bn1.beta.data[:] = src.scale_conv1.bias.b.data
+
+    _transfer_block(src, dst.res2, ['2a', '2b', '2c'])
+    _transfer_block(src, dst.res3, ['3a', '3b1', '3b2', '3b3'])
+    _transfer_block(src, dst.res4,
+                    ['4a'] + ['4b{}'.format(i) for i in range(1, 23)])
+    _transfer_block(src, dst.res5, ['5a', '5b', '5c'])
+
+    dst.fc6.W.data[:] = src.fc1000.W.data
+    dst.fc6.b.data[:] = src.fc1000.b.data
+
+
+def _transfer_resnet152(src, dst):
+    dst.conv1.W.data[:] = src.conv1.W.data
+    dst.bn1.avg_mean[:] = src.bn_conv1.avg_mean
+    dst.bn1.avg_var[:] = src.bn_conv1.avg_var
+    dst.bn1.gamma.data[:] = src.scale_conv1.W.data
+    dst.bn1.beta.data[:] = src.scale_conv1.bias.b.data
+
+    _transfer_block(src, dst.res2, ['2a', '2b', '2c'])
+    _transfer_block(src, dst.res3,
+                    ['3a'] + ['3b{}'.format(i) for i in range(1, 8)])
+    _transfer_block(src, dst.res4,
+                    ['4a'] + ['4b{}'.format(i) for i in range(1, 36)])
+    _transfer_block(src, dst.res5, ['5a', '5b', '5c'])
+
+    dst.fc6.W.data[:] = src.fc1000.W.data
+    dst.fc6.b.data[:] = src.fc1000.b.data
+
+
 def main():
     parser = argparse.ArgumentParser()
 
+    parser.add_argument(
+        'model_name', choices=('resnet50', 'resnet101', 'resnet152'))
     parser.add_argument('caffemodel')
     args = parser.parse_args()
 
-    model = ResNet50(pretrained_model=None, n_class=1000)
     caffemodel = CaffeFunction(args.caffemodel)
+    if args.model_name == 'resnet50':
+        model = ResNet50(pretrained_model=None, n_class=1000)
+        _transfer_resnet50(caffemodel, model)
+    elif args.model_name == 'resnet101':
+        model = ResNet101(pretrained_model=None, n_class=1000)
+        _transfer_resnet101(caffemodel, model)
+    elif args.model_name == 'resnet152':
+        model = ResNet152(pretrained_model=None, n_class=1000)
+        _transfer_resnet152(caffemodel, model)
 
-    _transfer_resnet50(caffemodel, model)
-
-    chainer.serializers.save_npz('resnet_50.npz', model)
+    chainer.serializers.save_npz(
+        '{}_imagenet_convert.npz'.format(args.model_name), model)
 
 
 if __name__ == '__main__':
