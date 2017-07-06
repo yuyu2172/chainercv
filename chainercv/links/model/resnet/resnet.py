@@ -14,8 +14,11 @@ from chainercv.utils import download_model
 
 
 # RGB order
+# This is channel wise mean of mean image distributed at
+# https://github.com/KaimingHe/deep-residual-networks
 _imagenet_mean = np.array(
-    [123.68, 116.779, 103.939], dtype=np.float32)[:, np.newaxis, np.newaxis]
+    [123.15163084, 115.90288257, 103.0626238],
+    dtype=np.float32)[:, np.newaxis, np.newaxis]
 
 
 class ResNet(SequentialFeatureExtractor):

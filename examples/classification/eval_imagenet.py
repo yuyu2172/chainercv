@@ -41,10 +41,11 @@ def main():
         description='Learning convnet from ILSVRC2012 dataset')
     parser.add_argument('val', help='Path to root of the validation dataset')
     parser.add_argument(
-        '--model', choices=('vgg16'))
+        '--model', choices=('vgg16', 'resnet50', 'resnet101', 'resnet152'))
     parser.add_argument('--pretrained_model')
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--batchsize', type=int, default=32)
+    parser.add_argument('--do_ten_crop', action='store_true')
     args = parser.parse_args()
 
     dataset = DirectoryParsingClassificationDataset(args.val)
@@ -65,7 +66,7 @@ def main():
         model = ResNet101(pretrained_model=pretrained_model)
     elif args.model == 'resnet152':
         model = ResNet152(pretrained_model=pretrained_model)
-    model = FeatureExtractionPredictor(model)
+    model = FeatureExtractionPredictor(model, do_ten_crop=args.do_ten_crop)
 
     if args.gpu >= 0:
         chainer.cuda.get_device(args.gpu).use()

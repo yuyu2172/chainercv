@@ -2,15 +2,31 @@
 
 ## Performance
 
-| Model | Top 1 Error (single crop) | Reference Top 1 Error (single crop) |
+Single crop error rate.
+
+| Model | Top 1 | Reference Top 1 |
 |:-:|:-:|:-:|
 | VGG16 | 29.0 % | 28.5 % [1] |
+| ResNet50 | 24.8 % | 24.7 % [2] |
+| ResNet101 | | 23.6 % [2] |
+| ResNet152 | | 23.0 % [2] |
+
+Ten crop error rate.
+
+| Model | Top 1 | Reference Top 1 |
+|:-:|:-:|:-:|
+| VGG16 |  |   |
+| ResNet50 | 22.9 % | 22.9 % [2] |
+| ResNet101 |21.8 % | 21.8 % [2] |
+| ResNet152 | | 21.4 % [2] |
+
 
 The results can be reproduced by the following command.
 The score is reported using a weight converted from a weight trained by Caffe.
 
 ```
-$ python eval_imagenet.py <path_to_val_dataset> [--model vgg16] [--pretrained_model <model_path>] [--batchsize <batchsize>] [--gpu <gpu>]
+$ python eval_imagenet.py <path_to_val_dataset> [--model vgg16|resnet50|resnet101|resnet152] [--pretrained_model <model_path>] [--batchsize <batchsize>] [--gpu <gpu>] [--do_ten_crop]
+
 ```
 
 
