@@ -58,7 +58,8 @@ def _transfer_resnet50(src, dst):
 
 
 def _transfer_resnet101(src, dst):
-    dst.conv1.W.data[:] = src.conv1.W.data
+    # Reorder weights to work on RGB and not on BGR
+    dst.conv1.W.data[:] = src.conv1.W.data[:, ::-1]
     dst.bn1.avg_mean[:] = src.bn_conv1.avg_mean
     dst.bn1.avg_var[:] = src.bn_conv1.avg_var
     dst.bn1.gamma.data[:] = src.scale_conv1.W.data
@@ -75,7 +76,8 @@ def _transfer_resnet101(src, dst):
 
 
 def _transfer_resnet152(src, dst):
-    dst.conv1.W.data[:] = src.conv1.W.data
+    # Reorder weights to work on RGB and not on BGR
+    dst.conv1.W.data[:] = src.conv1.W.data[:, ::-1]
     dst.bn1.avg_mean[:] = src.bn_conv1.avg_mean
     dst.bn1.avg_var[:] = src.bn_conv1.avg_var
     dst.bn1.gamma.data[:] = src.scale_conv1.W.data
