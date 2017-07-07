@@ -104,8 +104,8 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    import pickle
     import os
+    import pickle
     cache_fn = 'cache_train_dataset.pkl'
     if os.path.exists(cache_fn):
         with open(cache_fn, 'rb') as f:
