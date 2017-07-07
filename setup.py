@@ -62,9 +62,42 @@ class CheckingBuildExt(build_ext):
         self.check_cython_extensions(self.extensions)
         build_ext.build_extensions(self)
 
+
+class CythonCommand(build_ext):
+    """Custom distutils command subclassed from Cython.Distutils.build_ext
+    to compile pyx->c, and stop there. All this does is override the
+    C-compile method build_extension() with a no-op."""
+    def build_extension(self, ext):
+        pass
+
 cmdclass = {}
 
-cmdclass['build_ext'] = CheckingBuildExt
+if cython:
+    suffix = '.pyx'
+    cmdclass['build_ext'] = CheckingBuildExt
+    cmdclass['cython'] = CythonCommand
+else:
+    suffix = '.c'
+
+
+def srcpath(name=None, suffix='.pyx', subdir='.'):
+    return os.path.join('chainercv', subdir, name + suffix)
+
+
+ext_data = {
+    'utils.bbox._nms_gpu_post': {'pyx_file': 'utils/bbox/_nms_gpu_post'}
+}
+
+extensions = []
+for name, data in ext_data.items():
+    sources = [srcpath(data['pyxfile'], suffix=suffix, subdir='.')]
+
+    extension = Extension(
+        'chainercv.{}'.format(name),
+        sources=sources
+        include_dirs=include,
+    )
+    extensions.append(extension)
 
 
 setup(
@@ -79,7 +112,7 @@ setup(
     install_requires=install_requires,
     include_package_data=True,
     # for Cython
-    ext_modules=ext_modules,
+    ext_modules=extensions,
     cmdclass=cmdclass,
     # include_dirs=[np.get_include()],
 )
