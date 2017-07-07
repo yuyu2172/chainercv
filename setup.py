@@ -5,7 +5,6 @@ import os
 import pkg_resources
 from setuptools import find_packages
 
-from Cython.Distutils import build_ext as _build_ext
 from distutils.extension import Extension
 
 
