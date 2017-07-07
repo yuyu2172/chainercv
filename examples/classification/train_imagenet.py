@@ -10,6 +10,7 @@ from chainer import iterators
 from chainer.links import Classifier
 from chainer import training
 from chainer.training import extensions
+from chainer.training.updaters import MultiprocessParallelUpdater
 
 from chainercv.datasets import DirectoryParsingClassificationDataset
 from chainercv.iterators import TransformIterator
@@ -80,7 +81,7 @@ def get_train_iter(train_data, batchsize, devices,
 
 def get_updater(train_iter, optimizer, devices):
     if len(devices) > 1:
-        updater = chainer.training.updaters.MultiprocessParallelUpdater(
+        updater = MultiprocessParallelUpdater(
             train_iter, optimizer, devices=devices)
     else:
         updater = chainer.training.updater.StandardUpdater(
@@ -101,6 +102,7 @@ def main():
     parser.add_argument('--step_size', type=int, default=30)
     parser.add_argument('--epoch', type=int, default=90)
     args = parser.parse_args()
+    print(args)
 
     import pickle
     import os
@@ -125,14 +127,14 @@ def main():
     extractor = ResNet50(n_class=1000)
     model = Classifier(extractor)
 
-    lr = args.lr / len(args.gpu)
+    lr = args.lr / len(args.gpus)
     optimizer = chainer.optimizers.MomentumSGD(lr=lr, momentum=0.9)
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.WeightDecay(rate=0.0001))
 
-    if args.gpu >= 0:
-        chainer.cuda.get_device(args.gpu).use()
-        model.to_gpu()
+    # if args.gpu >= 0:
+    #     chainer.cuda.get_device(args.gpu).use()
+    #     model.to_gpu()
 
     updater = get_updater(train_iter, optimizer, args.gpus)
 
