@@ -8,16 +8,16 @@ Single crop error rate.
 |:-:|:-:|:-:|
 | VGG16 | 29.0 % | 28.5 % [1] |
 | ResNet50 | 24.8 % | 24.7 % [2] |
-| ResNet101 | | 23.6 % [2] |
-| ResNet152 | | 23.0 % [2] |
+| ResNet101 | 23.6 % | 23.6 % [2] |
+| ResNet152 | 23.2 % | 23.0 % [2] |
 
 Ten crop error rate.
 
 | Model | Top 1 | Reference Top 1 |
 |:-:|:-:|:-:|
 | VGG16 |  |   |
-| ResNet50 |  | 22.9 % [2] |
-| ResNet101 | | 21.8 % [2] |
+| ResNet50 | 23.0 % | 22.9 % [2] |
+| ResNet101 |21.8 % | 21.8 % [2] |
 | ResNet152 | | 21.4 % [2] |
 
 
