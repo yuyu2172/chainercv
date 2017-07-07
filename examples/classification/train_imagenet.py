@@ -4,29 +4,29 @@ import argparse
 import numpy as np
 
 import chainer
-from chainer import training
-from chainer.training import extensions
+from chainer.datasets import split_dataset_n_random
+from chainer.datasets import TransformDataset
 from chainer import iterators
 from chainer.links import Classifier
-from chainer.datasets import TransformDataset
-from chainer.training.extensions import Evaluator 
+from chainer import training
+from chainer.training import extensions
 
 from chainercv.datasets import DirectoryParsingClassificationDataset
+from chainercv.iterators import TransformIterator
 
-from chainercv.transforms import scale
-from chainercv.transforms import random_crop
-from chainercv.transforms import random_flip
 from chainercv.transforms import center_crop
 from chainercv.transforms import pca_lighting
+from chainercv.transforms import random_crop
+from chainercv.transforms import random_flip
+from chainercv.transforms import scale
 
 from chainercv.links import ResNet50
 
 from chainercv.links.model.resnet.resnet import _imagenet_mean
-from chainercv.iterators import TransformIterator
 
 
 class IteratorTransform(object):
-    
+
     def __init__(self, mean):
         self.mean = mean
 
@@ -55,13 +55,46 @@ def val_transform(in_data):
     return img, label
 
 
+def get_train_iter(train_data, batchsize, devices,
+                   iterator_transform=None, loaderjob=None):
+    if len(devices) > 1:
+        assert batchsize % len(devices) == 0
+        per_device_batchsize = batchsize // len(devices)
+        train_iter = [
+            chainer.iterators.MultiprocessIterator(
+                i, per_device_batchsize,
+                n_processes=loaderjob, shared_mem=10000000)
+            for i in split_dataset_n_random(train_data, len(devices))]
+        if iterator_transform is not None:
+            train_iter = [TransformIterator(it, iterator_transform, device)
+                          for it, device in zip(train_iter, devices)]
+    else:
+        train_iter = chainer.iterators.MultiprocessIterator(
+            train_data, batch_size=batchsize,
+            n_processes=loaderjob, shared_mem=100000000)
+        if iterator_transform is not None:
+            train_iter = TransformIterator(
+                train_iter, iterator_transform, devices[0])
+    return train_iter
+
+
+def get_updater(train_iter, optimizer, devices):
+    if len(devices) > 1:
+        updater = chainer.training.updaters.MultiprocessParallelUpdater(
+            train_iter, optimizer, devices=devices)
+    else:
+        updater = chainer.training.updater.StandardUpdater(
+            train_iter, optimizer, device=devices[0])
+    return updater
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Learning convnet from ILSVRC2012 dataset')
     parser.add_argument('train', help='Path to root of the train dataset')
     parser.add_argument('val', help='Path to root of the validation dataset')
     parser.add_argument('--pretrained_model')
-    parser.add_argument('--gpu', type=int, default=-1)
+    parser.add_argument('--gpus', type=int, nargs="*", default=[-1])
     parser.add_argument('--batchsize', type=int, default=256)
     parser.add_argument('--lr', type=float, default=1e-1)
     parser.add_argument('--out', type=str, default='result')
@@ -84,19 +117,16 @@ def main():
     val_data = DirectoryParsingClassificationDataset(args.val)
     val_data = TransformDataset(val_data, val_transform)
 
-    train_iter = iterators.MultiprocessIterator(
-        train_data, args.batchsize, repeat=False, shuffle=False,
-        shared_mem=10000000, n_prefetch=2)
+    train_iter = get_train_iter(train_data, args.batchsize, args.gpus)
     val_iter = iterators.MultiprocessIterator(
-        val_data, args.batchsize, repeat=False, shuffle=False, shared_mem=10000000)
-    train_iter = TransformIterator(
-        train_iter, IteratorTransform(_imagenet_mean),
-        device=args.gpu)
+        val_data, args.batchsize,
+        repeat=False, shuffle=False, shared_mem=10000000)
 
     extractor = ResNet50(n_class=1000)
     model = Classifier(extractor)
 
-    optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=0.9)
+    lr = args.lr / len(args.gpu)
+    optimizer = chainer.optimizers.MomentumSGD(lr=lr, momentum=0.9)
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.WeightDecay(rate=0.0001))
 
@@ -104,8 +134,7 @@ def main():
         chainer.cuda.get_device(args.gpu).use()
         model.to_gpu()
 
-    updater = chainer.training.updater.StandardUpdater(
-        train_iter, optimizer, device=args.gpu)
+    updater = get_updater(train_iter, optimizer, args.gpus)
 
     trainer = training.Trainer(
         updater, (args.epoch, 'epoch'), out=args.out)
