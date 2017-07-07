@@ -56,6 +56,18 @@ class TransformIterator(Iterator):
             batch = self.transform(_batch_to_device(batch, self.device))
             return batch
 
+    def finalize(self):
+        return self._iterator.finalize()
+
+    def serialize(self, serializer):
+        return self._iterator.serialize()
+
+    def __getattr__(self, name):
+        if hasattr(self._iterator, name):
+            return getattr(self._iterator, name)
+        else:
+            raise AttributeError
+
 
 def _batch_to_device(xs, device):
     """Batch of arrays (e.g. list of arrays or batch array)
