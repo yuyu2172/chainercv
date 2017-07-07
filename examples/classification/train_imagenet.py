@@ -41,7 +41,7 @@ class IteratorTransform(object):
             img = scale(img, scale_size)
             img = random_flip(img, x_random=True)
             img = random_crop(img, (224, 224))
-            # img = pca_lighting(img, 22.5)
+            img = pca_lighting(img, 22.5)
             img -= mean
             out_imgs.append(img)
         return out_imgs, labels
