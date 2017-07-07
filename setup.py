@@ -75,6 +75,7 @@ setup(
     author_email='yuyuniitani@gmail.com',
     license='MIT',
     description=description,
+    setup_requires=['numpy'],
     install_requires=install_requires,
     include_package_data=True,
     # for Cython
