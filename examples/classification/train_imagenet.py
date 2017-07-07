@@ -102,8 +102,8 @@ def main():
     parser.add_argument('--epoch', type=int, default=90)
     args = parser.parse_args()
 
-    import pickle
     import os
+    import pickle
     cache_fn = 'cache_train_dataset.pkl'
     if os.path.exists(cache_fn):
         with open(cache_fn, 'rb') as f:
