@@ -30,20 +30,21 @@ def pca_lighting(img, sigma, eigen_value=None, eigen_vector=None):
         array: An image in CHW format.
     """
     xp = chainer.cuda.get_array_module(img)
+    dtype = img.dtype
 
     if sigma <= 0:
         return img
 
     # these values are copied from facebook/fb.resnet.torch
     if eigen_value is None:
-        eigen_value = xp.array((0.2175, 0.0188, 0.0045))
+        eigen_value = xp.array((0.2175, 0.0188, 0.0045), dtype=dtype)
     if eigen_vector is None:
         eigen_vector = xp.array((
             (-0.5675, -0.5808, -0.5836),
             (0.7192, -0.0045, -0.6948),
-            (0.4009, -0.814,  0.4203)))
+            (0.4009, -0.814,  0.4203)), dtype=dtype)
 
-    alpha = xp.random.normal(0, sigma, size=3)
+    alpha = xp.random.normal(0, sigma, size=3).astype(dtype)
 
     img = img + eigen_vector.dot(eigen_value * alpha).reshape(-1, 1, 1)
 

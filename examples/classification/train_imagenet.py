@@ -34,8 +34,7 @@ class IteratorTransform(object):
     def __call__(self, in_data):
         imgs, labels = in_data
         out_imgs = []
-        xp = chainer.cuda.get_array_module(imgs)
-
+        xp = chainer.cuda.get_array_module(imgs[0])
         mean = xp.array(self.mean)
         for img in imgs:
             scale_size = np.random.randint(256, 481)
@@ -64,7 +63,7 @@ def get_train_iter(train_data, batchsize, devices,
         train_iter = [
             chainer.iterators.MultiprocessIterator(
                 i, per_device_batchsize,
-                n_processes=loaderjob, shared_mem=10000000)
+                n_processes=loaderjob, shared_mem=100000000)
             for i in split_dataset_n_random(train_data, len(devices))]
         if iterator_transform is not None:
             train_iter = [TransformIterator(it, iterator_transform, device)
@@ -119,7 +118,8 @@ def main():
     val_data = DirectoryParsingClassificationDataset(args.val)
     val_data = TransformDataset(val_data, val_transform)
 
-    train_iter = get_train_iter(train_data, args.batchsize, args.gpus)
+    train_iter = get_train_iter(train_data, args.batchsize, args.gpus,
+                                IteratorTransform(_imagenet_mean))
     val_iter = iterators.MultiprocessIterator(
         val_data, args.batchsize,
         repeat=False, shuffle=False, shared_mem=10000000)
@@ -127,8 +127,7 @@ def main():
     extractor = ResNet50(n_class=1000)
     model = Classifier(extractor)
 
-    lr = args.lr / len(args.gpus)
-    optimizer = chainer.optimizers.MomentumSGD(lr=lr, momentum=0.9)
+    optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=0.9)
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.WeightDecay(rate=0.0001))
 
@@ -161,6 +160,13 @@ def main():
             extensions.PlotReport(
                 ['main/loss'],
                 file_name='loss.png', trigger=plot_interval
+            ),
+            trigger=plot_interval
+        )
+        trainer.extend(
+            extensions.PlotReport(
+                ['iteration'], 'elapsed_time',
+                file_name='iteration.png', trigger=plot_interval
             ),
             trigger=plot_interval
         )
