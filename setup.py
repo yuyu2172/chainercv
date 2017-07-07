@@ -7,7 +7,7 @@ import pkg_resources
 
 # from Cython.Distutils import build_ext
 from distutils.extension import Extension
-import numpy as np
+# import numpy as np
 
 
 description = """
@@ -80,5 +80,5 @@ setup(
     # for Cython
     ext_modules=ext_modules,
     cmdclass=cmdclass,
-    include_dirs=[np.get_include()],
+    # include_dirs=[np.get_include()],
 )
