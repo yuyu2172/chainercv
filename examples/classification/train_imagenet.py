@@ -33,9 +33,9 @@ class IteratorTransform(object):
     def __call__(self, in_data):
         imgs, labels = in_data
         out_imgs = []
+        xp = chainer.cuda.get_array_module(imgs)
 
-        import cupy
-        mean = cupy.array(self.mean)
+        mean = xp.array(self.mean)
         for img in imgs:
             scale_size = np.random.randint(256, 481)
             img = scale(img, scale_size)
@@ -81,7 +81,6 @@ def main():
             pickle.dump(train_data, f, protocol=2)
     print('finished loading train')
 
-    train_data = TransformDataset(train_data, transform)
     val_data = DirectoryParsingClassificationDataset(args.val)
     val_data = TransformDataset(val_data, val_transform)
 
@@ -90,7 +89,9 @@ def main():
         shared_mem=10000000, n_prefetch=2)
     val_iter = iterators.MultiprocessIterator(
         val_data, args.batchsize, repeat=False, shuffle=False, shared_mem=10000000)
-    train_iter = TransformIterator(train_iter, IteratorTransform(_imagenet_mean))
+    train_iter = TransformIterator(
+        train_iter, IteratorTransform(_imagenet_mean),
+        device=args.gpu)
 
     extractor = ResNet50(n_class=1000)
     model = Classifier(extractor)
@@ -104,7 +105,7 @@ def main():
         model.to_gpu()
 
     updater = chainer.training.updater.StandardUpdater(
-        train_iter, optimizer, device=args.gpu, converter=concat_examples)
+        train_iter, optimizer, device=args.gpu)
 
     trainer = training.Trainer(
         updater, (args.epoch, 'epoch'), out=args.out)
