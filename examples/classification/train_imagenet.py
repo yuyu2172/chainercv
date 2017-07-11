@@ -52,7 +52,7 @@ def sequential_transform(in_data):
     img, label = in_data
 
     _, H, W = img.shape
-    if H < 224 and W < 224:
+    if H < 224 or W < 224:
         img = scale(img, 224)
 
     img = random_crop(img, (224, 224))
