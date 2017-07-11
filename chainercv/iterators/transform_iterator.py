@@ -89,5 +89,6 @@ def _batch_to_device(xs, device):
     xs_gpu = [x_gpu.reshape(shape) for x_gpu, shape in zip(xs_gpu, shapes)]
 
     for x, x_gpu in zip(xs, xs_gpu):
-        x_gpu.set(np.array(x))
+        x_gpu.set(np.array(x, copy=False))
+
     return xs_gpu
