@@ -1,3 +1,4 @@
+from __future__ import division
 import matplotlib
 matplotlib.use('agg')
 import argparse
@@ -20,11 +21,44 @@ from chainercv.transforms import pca_lighting
 from chainercv.transforms import random_crop
 from chainercv.transforms import random_flip
 
+from chainercv.transforms import resize
 from chainercv.transforms import scale
 
 from chainercv.links import ResNet50
 
 from chainercv.links.model.resnet.resnet import _imagenet_mean
+
+
+def _scale_out_size(in_size, size, fit_short=True):
+    H, W = in_size
+    if fit_short:
+        if H < W:
+            out_size = (size, int(size * W / H))
+        else:
+            out_size = (int(size * H / W), size)
+
+    else:
+        if H < W:
+            out_size = (int(size * H / W), size)
+        else:
+            out_size = (size, int(size * W / H))
+    return out_size
+
+
+def scale_and_random_crop(img, size, out_size):
+    # Internally, this does crop and scale
+    # (C, H, W) --> (C, sH, sW) --> (C, out_size[0], out_size[1])
+    # Equivalent to
+    # (C, H, W) -->
+    # (C, out_size[0]/s, out_size[1]/s) -->
+    # (C, out_size[0], out_size[1])
+    _, H, W = img.shape
+    scale_size = _scale_out_size((H, W), size, fit_short=True)
+    scale = scale_size[0] / H
+    crop_size = (int(out_size[0] / scale), int(out_size[1] / scale))
+    img = random_crop(img, crop_size)
+    img = resize(img, out_size)
+    return img
 
 
 class IteratorTransform(object):
@@ -52,10 +86,9 @@ def sequential_transform(in_data):
     img, label = in_data
 
     _, H, W = img.shape
-    if H < 224 and W < 224:
-        img = scale(img, 224)
-
-    img = random_crop(img, (224, 224))
+    scale_size = np.random.randint(256, 481)
+    img = scale_and_random_crop(img, scale_size, (224, 224))
+    # img = random_crop(img, (224, 224))
     img = random_flip(img, x_random=True)
     img -= _imagenet_mean
     return img, label
