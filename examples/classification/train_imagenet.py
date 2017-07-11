@@ -88,7 +88,6 @@ def sequential_transform(in_data):
     _, H, W = img.shape
     scale_size = np.random.randint(256, 481)
     img = scale_and_random_crop(img, scale_size, (224, 224))
-    # img = random_crop(img, (224, 224))
     img = random_flip(img, x_random=True)
     img -= _imagenet_mean
     return img, label
