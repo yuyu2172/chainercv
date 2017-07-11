@@ -63,7 +63,7 @@ def get_train_iter(train_data, batchsize, devices,
         train_iter = [
             chainer.iterators.MultiprocessIterator(
                 i, per_device_batchsize,
-                n_processes=4, shared_mem=150000000)
+                n_processes=loaderjob, shared_mem=150000000)
             for i in split_dataset_n_random(train_data, len(devices))]
         if iterator_transform is not None:
             train_iter = [TransformIterator(it, iterator_transform, device)
@@ -95,6 +95,7 @@ def main():
     parser.add_argument('val', help='Path to root of the validation dataset')
     parser.add_argument('--pretrained_model')
     parser.add_argument('--gpus', type=int, nargs="*", default=[-1])
+    parser.add_argument('--loaderjob', type=int, default=4)
     parser.add_argument('--batchsize', type=int, default=256)
     parser.add_argument('--lr', type=float, default=1e-1)
     parser.add_argument('--out', type=str, default='result')
@@ -120,7 +121,7 @@ def main():
 
     train_data = chainer.datasets.SubDataset(train_data, start=50000, finish=len(train_data), order=np.arange(len(train_data)))
     train_iter = get_train_iter(train_data, args.batchsize, args.gpus,
-                                IteratorTransform(_imagenet_mean))
+                                IteratorTransform(_imagenet_mean), loaderjob=args.loaderjob)
     val_iter = iterators.MultiprocessIterator(
         val_data, args.batchsize,
         repeat=False, shuffle=False, shared_mem=10000000)

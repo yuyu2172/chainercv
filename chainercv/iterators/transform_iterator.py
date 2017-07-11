@@ -30,31 +30,33 @@ class TransformIterator(Iterator):
             raise ValueError('batch is empty')
 
         first_elem = batch[0]
+        import cupy
 
-        if isinstance(first_elem, tuple):
-            in_arrays = []
-            for i in six.moves.range(len(first_elem)):
-                in_arrays.append(
-                    _batch_to_device([example[i] for example in batch],
-                                     self.device))
-            in_arrays = self.transform(tuple(in_arrays))
-            batch = zip(*in_arrays)
-            return batch
+        with cupy.cuda.Device(self.device):
+            if isinstance(first_elem, tuple):
+                in_arrays = []
+                for i in six.moves.range(len(first_elem)):
+                    in_arrays.append(
+                        _batch_to_device([example[i] for example in batch],
+                                        self.device))
+                in_arrays = self.transform(tuple(in_arrays))
+                batch = zip(*in_arrays)
+                return batch
 
-        elif isinstance(first_elem, dict):
-            in_arrays = {}
+            elif isinstance(first_elem, dict):
+                in_arrays = {}
 
-            for key in first_elem:
-                in_arrays[key] = _batch_to_device(
-                    [example[key] for example in batch], self.device)
-            in_arrays = self.transform(in_arrays)
-            batch = [[in_arrays[key][i] for key in in_arrays.keys()]
-                     for i in range(len(batch))]
-            return batch
+                for key in first_elem:
+                    in_arrays[key] = _batch_to_device(
+                        [example[key] for example in batch], self.device)
+                in_arrays = self.transform(in_arrays)
+                batch = [[in_arrays[key][i] for key in in_arrays.keys()]
+                        for i in range(len(batch))]
+                return batch
 
-        else:
-            batch = self.transform(_batch_to_device(batch, self.device))
-            return batch
+            else:
+                batch = self.transform(_batch_to_device(batch, self.device))
+                return batch
 
     def finalize(self):
         return self._iterator.finalize()
@@ -72,15 +74,20 @@ class TransformIterator(Iterator):
 def _batch_to_device(xs, device):
     """Batch of arrays (e.g. list of arrays or batch array)
 
+    It is designed to have minimal amount of malloc call.
+
     """
+    # TODO: exist if device is CPU
+    import cupy
+
     shapes = [x.shape for x in xs]
     elem_sizes = [np.prod(x.shape) for x in xs]
     array_split = np.cumsum(elem_sizes)
 
-    concat_xs = np.concatenate([x.reshape(-1) for x in xs])
-    concat_xs = to_device(device, concat_xs)
+    xs_gpu = cupy.empty((np.sum(elem_sizes, dtype=np.int32),), dtype=xs[0].dtype)
+    xs_gpu = cupy.split(xs_gpu, array_split)
+    xs_gpu = [x_gpu.reshape(shape) for x_gpu, shape in zip(xs_gpu, shapes)]
 
-    xp = chainer.cuda.get_array_module(concat_xs)
-    xs = xp.split(concat_xs, array_split)
-    xs = [x.reshape(shape) for x, shape in zip(xs, shapes)]
-    return xs
+    for x, x_gpu in zip(xs, xs_gpu):
+        x_gpu.set(np.array(x))
+    return xs_gpu
