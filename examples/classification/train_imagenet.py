@@ -63,7 +63,7 @@ def get_train_iter(train_data, batchsize, devices,
         train_iter = [
             chainer.iterators.MultiprocessIterator(
                 i, per_device_batchsize,
-                n_processes=loaderjob, shared_mem=100000000)
+                n_processes=4, shared_mem=150000000)
             for i in split_dataset_n_random(train_data, len(devices))]
         if iterator_transform is not None:
             train_iter = [TransformIterator(it, iterator_transform, device)
@@ -71,7 +71,7 @@ def get_train_iter(train_data, batchsize, devices,
     else:
         train_iter = chainer.iterators.MultiprocessIterator(
             train_data, batch_size=batchsize,
-            n_processes=loaderjob, shared_mem=100000000)
+            n_processes=loaderjob, shared_mem=150000000)
         if iterator_transform is not None:
             train_iter = TransformIterator(
                 train_iter, iterator_transform, devices[0])
@@ -118,6 +118,7 @@ def main():
     val_data = DirectoryParsingClassificationDataset(args.val)
     val_data = TransformDataset(val_data, val_transform)
 
+    train_data = chainer.datasets.SubDataset(train_data, start=50000, finish=len(train_data), order=np.arange(len(train_data)))
     train_iter = get_train_iter(train_data, args.batchsize, args.gpus,
                                 IteratorTransform(_imagenet_mean))
     val_iter = iterators.MultiprocessIterator(
@@ -150,7 +151,8 @@ def main():
 
     trainer.extend(extensions.PrintReport(
         ['iteration', 'epoch', 'elapsed_time', 'lr',
-         'main/loss']
+         'main/loss', 'validation/main/loss',
+         'main/accuracy', 'validation/main/accuracy']
     ), trigger=print_interval)
 
     trainer.extend(extensions.ProgressBar(update_interval=10))
@@ -158,8 +160,15 @@ def main():
     if extensions.PlotReport.available():
         trainer.extend(
             extensions.PlotReport(
-                ['main/loss'],
+                ['main/loss', 'validation/main/loss'],
                 file_name='loss.png', trigger=plot_interval
+            ),
+            trigger=plot_interval
+        )
+        trainer.extend(
+            extensions.PlotReport(
+                ['main/accuracy', 'validation/main/accuracy'],
+                file_name='accuracy.png', trigger=plot_interval
             ),
             trigger=plot_interval
         )
@@ -168,10 +177,10 @@ def main():
                 ['iteration'], 'elapsed_time',
                 file_name='iteration.png', trigger=plot_interval
             ),
-            trigger=plot_interval
+            trigger=(0.1, 'epoch')
         )
     trainer.extend(
-        extensions.Evaluator(val_iter, model),
+        extensions.Evaluator(val_iter, model, device=args.gpus[0]),
         trigger=(1, 'epoch')
     )
 
