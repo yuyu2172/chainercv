@@ -19,6 +19,7 @@ from chainercv.transforms import center_crop
 from chainercv.transforms import pca_lighting
 from chainercv.transforms import random_crop
 from chainercv.transforms import random_flip
+
 from chainercv.transforms import scale
 
 from chainercv.links import ResNet50
@@ -45,6 +46,19 @@ class IteratorTransform(object):
             img -= mean
             out_imgs.append(img)
         return out_imgs, labels
+
+
+def sequential_transform(in_data):
+    img, label = in_data
+
+    _, H, W = img.shape
+    if H < 224 and W < 224:
+        img = scale(img, 224)
+
+    img = random_crop(img, (224, 224))
+    img = random_flip(img, x_random=True)
+    img -= _imagenet_mean
+    return img, label
 
 
 def val_transform(in_data):
@@ -119,9 +133,13 @@ def main():
     val_data = DirectoryParsingClassificationDataset(args.val)
     val_data = TransformDataset(val_data, val_transform)
 
-    train_data = chainer.datasets.SubDataset(train_data, start=50000, finish=len(train_data), order=np.arange(len(train_data)))
-    train_iter = get_train_iter(train_data, args.batchsize, args.gpus,
-                                IteratorTransform(_imagenet_mean), loaderjob=args.loaderjob)
+    if False:
+        train_iter = get_train_iter(train_data, args.batchsize, args.gpus,
+                                    IteratorTransform(_imagenet_mean), loaderjob=args.loaderjob)
+    else:
+        train_data = TransformDataset(train_data, sequential_transform)
+        train_iter = get_train_iter(train_data, args.batchsize, args.gpus,
+                                    loaderjob=args.loaderjob)
     val_iter = iterators.MultiprocessIterator(
         val_data, args.batchsize,
         repeat=False, shuffle=False, shared_mem=10000000)
