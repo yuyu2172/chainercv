@@ -24,6 +24,7 @@ from chainercv.transforms import random_flip
 from chainercv.transforms import resize
 from chainercv.transforms import scale
 
+from chainercv.links import VGG16
 from chainercv.links import ResNet18
 from chainercv.links import ResNet50
 
@@ -137,8 +138,9 @@ def get_updater(train_iter, optimizer, devices):
 
 def main():
     archs = {
-        'resnet18': ResNet18,
-        'resnet50': ResNet50
+        'vgg16': {'class': VGG16, 'score_layer_name': 'fc8'},
+        'resnet18': {'class': ResNet18, 'score_layer_name': 'fc6'},
+        'resnet50': {'class': ResNet50, 'score_layer_name': 'fc6'}
     }
     parser = argparse.ArgumentParser(
         description='Learning convnet from ILSVRC2012 dataset')
@@ -151,6 +153,8 @@ def main():
     parser.add_argument('--loaderjob', type=int, default=4)
     parser.add_argument('--batchsize', type=int, default=256)
     parser.add_argument('--lr', type=float, default=1e-1)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--out', type=str, default='result')
     parser.add_argument('--step_size', type=int, default=30)
     parser.add_argument('--epoch', type=int, default=90)
@@ -183,12 +187,13 @@ def main():
         val_data, args.batchsize,
         repeat=False, shuffle=False, shared_mem=10000000)
 
-    extractor = archs[args.arch](n_class=1000, layer_names='fc6')
+    extractor = archs[args.arch]['class'](n_class=1000)
+    extractor.layer_names = archs[args.arch]['score_layer_name']
     model = Classifier(extractor)
 
-    optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=0.9)
+    optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=args.moementum)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(rate=0.0001))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(rate=args.weight_decay))
 
     # if args.gpu >= 0:
     #     chainer.cuda.get_device(args.gpu).use()
