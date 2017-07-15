@@ -21,15 +21,50 @@ _imagenet_mean = np.array(
     dtype=np.float32)[:, np.newaxis, np.newaxis]
 
 
+class HeNormal(chainer.initializer.Initializer):
+
+    """Initializes array with scaled Gaussian distribution.
+
+    Each element of the array is initialized by the value drawn
+    independently from Gaussian distribution whose mean is 0,
+    and standard deviation is
+    :math:`scale \\times \\sqrt{\\frac{2}{fan_{in}}}`,
+    where :math:`fan_{in}` is the number of input units.
+
+    Reference:  He et al., https://arxiv.org/abs/1502.01852
+
+    Args:
+        scale (float): A constant that determines the scale
+            of the standard deviation.
+        dtype: Data type specifier.
+
+    """
+
+    def __init__(self, scale=1.0, dtype=None):
+        self.scale = scale
+        super(HeNormal, self).__init__(dtype)
+
+    def __call__(self, array):
+        if self.dtype is not None:
+            assert array.dtype == self.dtype
+        fan_in, fan_out = chainer.initializer.get_fans(array.shape)
+        # pytorch/vision#183 
+        s = self.scale * np.sqrt(2. / fan_out)
+        chainer.initializers.Normal(s)(array)
+
+
 class ResNet(SequentialFeatureExtractor):
 
     _blocks = {
+        'resnet18': [2, 2, 2, 2],
         'resnet50': [3, 4, 6, 3],
         'resnet101': [3, 4, 23, 3],
         'resnet152': [3, 8, 36, 3]
     }
 
     _models = {
+        'resnet18': {
+        },
         'resnet50': {
             'imagenet': {
                 'n_class': 1000,
@@ -83,7 +118,7 @@ class ResNet(SequentialFeatureExtractor):
         else:
             # Employ default initializers used in the original paper.
             if initialW is None:
-                initialW = initializers.normal.HeNormal(scale=1.)
+                initialW = HeNormal(scale=1.)
         kwargs = {'initialW': initialW}
 
         layers = collections.OrderedDict([
@@ -113,6 +148,15 @@ def _global_average_pooling_2d(x):
     h = F.average_pooling_2d(x, (rows, cols), stride=1)
     h = h.reshape(n, channel)
     return h
+
+
+class ResNet18(ResNet):
+
+    def __init__(self, layer_names='prob', pretrained_model=None,
+                 n_class=None, mean=None, initialW=None):
+        super(ResNet18, self).__init__(
+            'resnet18', layer_names, pretrained_model,
+            n_class, mean, initialW)
 
 
 class ResNet50(ResNet):

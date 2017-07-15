@@ -24,6 +24,7 @@ from chainercv.transforms import random_flip
 from chainercv.transforms import resize
 from chainercv.transforms import scale
 
+from chainercv.links import ResNet18
 from chainercv.links import ResNet50
 
 from chainercv.links.model.resnet.resnet import _imagenet_mean
@@ -135,10 +136,16 @@ def get_updater(train_iter, optimizer, devices):
 
 
 def main():
+    archs = {
+        'resnet18': ResNet18,
+        'resnet50': ResNet50
+    }
     parser = argparse.ArgumentParser(
         description='Learning convnet from ILSVRC2012 dataset')
     parser.add_argument('train', help='Path to root of the train dataset')
     parser.add_argument('val', help='Path to root of the validation dataset')
+    parser.add_argument('--arch', '-a', choices=archs.keys(), default='resnet50',
+                        help='Convnet architecture')
     parser.add_argument('--pretrained_model')
     parser.add_argument('--gpus', type=int, nargs="*", default=[-1])
     parser.add_argument('--loaderjob', type=int, default=4)
@@ -176,7 +183,7 @@ def main():
         val_data, args.batchsize,
         repeat=False, shuffle=False, shared_mem=10000000)
 
-    extractor = ResNet50(n_class=1000)
+    extractor = archs[args.arch](n_class=1000, layer_names='fc6')
     model = Classifier(extractor)
 
     optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=0.9)
@@ -222,13 +229,6 @@ def main():
                 file_name='accuracy.png', trigger=plot_interval
             ),
             trigger=plot_interval
-        )
-        trainer.extend(
-            extensions.PlotReport(
-                ['iteration'], 'elapsed_time',
-                file_name='iteration.png', trigger=plot_interval
-            ),
-            trigger=(0.1, 'epoch')
         )
     trainer.extend(
         extensions.Evaluator(val_iter, model, device=args.gpus[0]),
