@@ -206,7 +206,7 @@ def main():
     plot_interval = 1, 'epoch'
 
     trainer.extend(
-        extensions.snapshot_object(model.faster_rcnn, 'snapshot_model.npz'),
+        extensions.snapshot_object(extractor, 'snapshot_model.npz'),
         trigger=(args.epoch, 'epoch'))
     trainer.extend(extensions.LogReport(trigger=log_interval))
 
