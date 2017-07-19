@@ -148,10 +148,10 @@ def _global_average_pooling_2d(x):
 
 class ResNet18(ResNet):
 
-    def __init__(self, layer_names='prob', pretrained_model=None,
+    def __init__(self, pretrained_model=None,
                  n_class=None, mean=None, initialW=None):
         super(ResNet18, self).__init__(
-            'resnet18', layer_names, pretrained_model,
+            'resnet18', pretrained_model,
             n_class, mean, initialW)
 
 
