@@ -1,6 +1,3 @@
-import collections
-from itertools import islice
-
 import chainer
 
 
@@ -10,118 +7,135 @@ class SequentialFeatureExtractor(chainer.Chain):
 
     This class is a base class that can be used for an implementation of
     a feature extractor model.
-    The link takes :obj:`layers` to specify the computation
-    conducted in :meth:`__call__`.
-    :obj:`layers` is a list or :obj:`collections.OrderedDict` of
-    callable objects called layers, which are going to be called sequentially
-    starting from the top to the end.
-    A :obj:`chainer.Link` object in the sequence will be added as
-    a child link of this object.
+    Callable objects, such as :class:`chainer.Link` and
+    :class:`chainer.Function`, can be registered to this chain with
+    :meth:`init_scope`.
+    This chain keeps the order of registerations and :meth:`__call__`
+    executes callables in that order.
+    A :class:`chainer.Link` object in the sequence will be added as
+    a child link of this link.
 
     :meth:`__call__` returns single or multiple features that are picked up
     through a stream of computation.
-    These features can be specified by :obj:`layer_names`, which contains
-    the names of the layer whose output is collected.
-    When :obj:`layer_names` is a string, single value is returned.
-    When :obj:`layer_names` is an iterable of strings, a tuple of values
-    will be returned. These values are ordered in the same order of the
-    strings in :obj:`layer_names`.
+    These features can be specified by :obj:`feature_names`, which contains
+    the names of the features that are collected.
+    When :obj:`feature_names` is a string, single feature is returned.
+    When :obj:`feature_names` is an iterable of strings, a tuple of features
+    is returned. The order of the features is the same as the order of
+    the strings in :obj:`feature_names`.
+    When :obj:`feature_names` is :obj:`None`, the last feature is returned.
 
     Examples:
 
-        >>> import collections
         >>> import chainer.functions as F
         >>> import chainer.links as L
-        >>> layers = collections.OrderedDict([
-        >>>     ('l1', L.Linear(None, 1000)),
-        >>>     ('l1_relu', F.relu),
-        >>>     ('l2', L.Linear(None, 1000)),
-        >>>     ('l2_relu', F.relu),
-        >>>     ('l3', L.Linear(None, 10))])
-        >>> model = SequentialFeatureExtractor(layers, ['l2_relu', 'l3'])
-        >>> # These are outputs of l2_relu and l3 layers.
-        >>> feat1, feat2 = model(imgs)
+        >>> model = SequentialFeatureExtractor()
+        >>> with model.init_scope():
+        >>>     model.l1 = L.Linear(None, 1000)
+        >>>     model.l1_relu = F.relu
+        >>>     model.l2 = L.Linear(None, 1000)
+        >>>     model.l2_relu = F.relu
+        >>>     model.l3 = L.Linear(None, 10)
+        >>> # This is feature l3
+        >>> feat3 = model(x)
+        >>> # The features to be collected can be changed.
+        >>> model.feature_names = ('l2_relu', 'l1_relu')
+        >>> # These are features l2_relu and l1_relu.
+        >>> feat2, feat1 = model(x)
 
-
-    The implementation is optimized for speed and memory.
-    A layer that is not needed to collect all features listed in
-    :obj:`layer_names` will not be added as a child link.
-    Also, this object only conducts the minimal amount of computation needed
-    to collect these features.
-
-    Args:
-        layers (list or collections.OrderedDict of callables):
-            Callable objects called in the forward pass.
-        layer_names (string or iterable of strings):
-            Names of layers whose outputs will be collected in
+    Params:
+        feature_names (string or iterable of strings):
+            Names of features that are collected during
             the forward pass.
+        all_feature_names (iterable of strings):
+            Names of features that can be collected from
+            this chain. The names are ordered in the order
+            of computation.
 
     """
 
-    def __init__(self, layers, layer_names=None):
+    def __init__(self):
         super(SequentialFeatureExtractor, self).__init__()
+        self.all_feature_names = list()
+        # Two attributes are initialized by the setter of feature_names.
+        # self._feature_names -> None
+        # self._return_tuple -> False
+        self.feature_names = None
 
-        if not isinstance(layers, collections.OrderedDict):
-            layers = collections.OrderedDict(
-                [('{}_{}'.format(layer.__class__.__name__, i), layer)
-                 for i, layer in enumerate(layers)])
-        self._layers = layers
+    def __setattr__(self, name, value):
+        super(SequentialFeatureExtractor, self).__setattr__(name, value)
+        if self.within_init_scope and callable(value):
+            self.all_feature_names.append(name)
 
-        if layer_names is None:
-            layer_names = list(self._layers.keys())[-1]
+    def __delattr__(self, name):
+        if self._feature_names and name in self._feature_names:
+            raise AttributeError(
+                'Feature {:s} is registered to feature_names.'.format(name))
+        super(SequentialFeatureExtractor, self).__delattr__(name)
+        try:
+            self.all_feature_names.remove(name)
+        except ValueError:
+            pass
 
-        if (not isinstance(layer_names, str) and
-                all([isinstance(name, str) for name in layer_names])):
+    @property
+    def feature_names(self):
+        if self._feature_names is None:
+            return None
+
+        if self._return_tuple:
+            return self._feature_names
+        else:
+            return self._feature_names[0]
+
+    @feature_names.setter
+    def feature_names(self, feature_names):
+        if feature_names is None:
+            self._return_tuple = False
+            self._feature_names = None
+            return
+
+        if (not isinstance(feature_names, str) and
+                all(isinstance(name, str) for name in feature_names)):
             return_tuple = True
         else:
             return_tuple = False
-            layer_names = [layer_names]
+            feature_names = (feature_names,)
+        if any(name not in self.all_feature_names for name in feature_names):
+            raise ValueError('Invalid feature name')
+
         self._return_tuple = return_tuple
-        self._layer_names = layer_names
-
-        # Delete unnecessary layers from self._layers based on layer_names.
-        # Computation is equivalent to layers = layers[:last_index + 1].
-        last_index = max([list(self._layers.keys()).index(name) for
-                          name in self._layer_names])
-        self._layers = collections.OrderedDict(
-            islice(self._layers.items(), None, last_index + 1))
-
-        with self.init_scope():
-            for name, layer in self._layers.items():
-                if isinstance(layer, chainer.Link):
-                    setattr(self, name, layer)
+        self._feature_names = tuple(feature_names)
 
     def __call__(self, x):
-        """Forward sequential feature extraction model.
+        """Forward this model.
 
         Args:
-            x (chainer.Variable or array): Input to the network.
+            x (chainer.Variable or array): Input to the model.
 
         Returns:
             chainer.Variable or tuple of chainer.Variable:
-            The returned values are determined by :obj:`layer_names`.
+            The returned features are determined by :obj:`feature_names`.
 
         """
+        if self._feature_names is None:
+            feature_names = (self.all_feature_names[-1],)
+        else:
+            feature_names = self._feature_names
+
+        # The biggest index among indices of the features that are included
+        # in feature_names.
+        last_index = max(self.all_feature_names.index(name) for
+                         name in feature_names)
+
         features = {}
         h = x
-        for name, layer in self._layers.items():
-            h = layer(h)
-            if name in self._layer_names:
+        for name in self.all_feature_names[:last_index + 1]:
+            h = self[name](h)
+            if name in feature_names:
                 features[name] = h
 
         if self._return_tuple:
-            features = tuple(
-                [features[name] for name in self._layer_names])
+            features = tuple(features[name] for name in feature_names)
         else:
             features = list(features.values())[0]
         return features
-
-    def copy(self):
-        ret = super(SequentialFeatureExtractor, self).copy()
-        layers = []
-        for name, layer in self._layers.items():
-            if name in self._children:
-                layer = ret[name]
-            layers.append((name, layer))
-        ret.layers = collections.OrderedDict(layers)
-        return ret
