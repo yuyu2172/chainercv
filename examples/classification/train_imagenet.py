@@ -191,7 +191,7 @@ def main():
     extractor.layer_names = archs[args.arch]['score_layer_name']
     model = Classifier(extractor)
 
-    optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=args.moementum)
+    optimizer = chainer.optimizers.MomentumSGD(lr=args.lr, momentum=args.momentum)
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.WeightDecay(rate=args.weight_decay))
 
