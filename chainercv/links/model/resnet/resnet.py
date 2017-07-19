@@ -47,7 +47,7 @@ class HeNormal(chainer.initializer.Initializer):
         if self.dtype is not None:
             assert array.dtype == self.dtype
         fan_in, fan_out = chainer.initializer.get_fans(array.shape)
-        # pytorch/vision#183 
+        # pytorch/vision#183
         s = self.scale * np.sqrt(2. / fan_out)
         chainer.initializers.Normal(s)(array)
 
@@ -63,6 +63,12 @@ class ResNet(SequentialFeatureExtractor):
 
     _models = {
         'resnet18': {
+            'imagenet': {
+                'n_class': 1000,
+                'url': 'https://github.com/yuyu2172/share-weights/releases/'
+                'download/0.0.4/resnet_18_imagenet_2017_07_19.npz',
+                'mean': _imagenet_mean
+            },
         },
         'resnet50': {
             'imagenet': {
