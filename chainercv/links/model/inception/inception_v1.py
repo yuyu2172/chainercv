@@ -29,6 +29,9 @@ _imagenet_mean = np.array(
 
 class InceptionV1(SequentialFeatureExtractor):
 
+    _models = {
+    }
+
     def __init__(self,
                  pretrained_model=None, n_class=None, mean=None,
                  initialW=None, initial_bias=None):
@@ -39,6 +42,13 @@ class InceptionV1(SequentialFeatureExtractor):
             initialW = uniform.LeCunUniform(scale=1.)
         if pretrained_model:
             initialW = constant.Zero()
+
+        if mean is None:
+            if pretrained_model in self._models:
+                mean = self._models[pretrained_model]['mean']
+
+        # TODO FIX
+        self.mean = _imagenet_mean
 
         inception_kwargs = {'conv_init': initialW, 'bias_init': initial_bias}
 
