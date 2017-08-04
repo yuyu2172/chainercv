@@ -10,6 +10,7 @@ from chainer import iterators
 
 from chainercv.datasets import DirectoryParsingClassificationDataset
 from chainercv.links import FeatureExtractionPredictor
+from chainercv.links import InceptionV1
 from chainercv.links import ResNet101
 from chainercv.links import ResNet152
 from chainercv.links import ResNet50
@@ -41,7 +42,8 @@ def main():
         description='Learning convnet from ILSVRC2012 dataset')
     parser.add_argument('val', help='Path to root of the validation dataset')
     parser.add_argument(
-        '--model', choices=('vgg16', 'resnet50', 'resnet101', 'resnet152'))
+        '--model', choices=(
+            'vgg16', 'resnet50', 'resnet101', 'resnet152', 'inception_v1'))
     parser.add_argument('--pretrained_model')
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--batchsize', type=int, default=32)
@@ -66,6 +68,8 @@ def main():
         model = ResNet101(pretrained_model=pretrained_model)
     elif args.model == 'resnet152':
         model = ResNet152(pretrained_model=pretrained_model)
+    elif args.model == 'inception_v1':
+        model = InceptionV1(pretrained_model=pretrained_model, n_class=1000)
     model = FeatureExtractionPredictor(model, do_ten_crop=args.do_ten_crop)
 
     if args.gpu >= 0:
