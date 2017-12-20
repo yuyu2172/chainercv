@@ -3,7 +3,6 @@ import copy
 import numpy as np
 
 import chainer
-from chainer.datasets import ConcatenatedDataset
 from chainer.datasets import TransformDataset
 from chainer.optimizer import WeightDecay
 from chainer import serializers
@@ -117,11 +116,11 @@ def main():
 
     if args.model == 'ssd300':
         model = SSD300(
-            n_fg_class=len(voc_bbox_label_names),
+            n_fg_class=len(coco_bbox_label_names),
             pretrained_model='imagenet')
     elif args.model == 'ssd512':
         model = SSD512(
-            n_fg_class=len(voc_bbox_label_names),
+            n_fg_class=len(coco_bbox_label_names),
             pretrained_model='imagenet')
 
     model.use_preset('evaluate')
@@ -130,7 +129,12 @@ def main():
         chainer.cuda.get_device_from_id(args.gpu).use()
         model.to_gpu()
 
-    train = TransformDataset(COCOBboxDataset(split='train'),
+    train = COCOBboxDataset(split='train')
+    mask = np.array([example[1].shape[0] != 0 for example in train])
+    order = np.concatenate(np.where(mask)[0], np.zeros(len(mask)))
+    train = chainer.datasets.SubDataset(train, 0, len(np.sum(mask)), order)
+    train = TransformDataset(
+        train,
         Transform(model.coder, model.insize, model.mean))
     train_iter = chainer.iterators.MultiprocessIterator(train, args.batchsize)
 
@@ -156,7 +160,7 @@ def main():
     trainer.extend(
         DetectionVOCEvaluator(
             test_iter, model, use_07_metric=True,
-            label_names=voc_bbox_label_names),
+            label_names=coco_bbox_label_names),
         trigger=(10000, 'iteration'))
 
     log_interval = 10, 'iteration'
