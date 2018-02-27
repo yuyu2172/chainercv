@@ -73,23 +73,23 @@ class CUBKeypointDataset(CUBDatasetBase):
 
         # load keypoint
         parts_loc_file = os.path.join(self.data_dir, 'parts', 'part_locs.txt')
-        self.kp_dict = collections.OrderedDict()
-        self.kp_mask_dict = collections.OrderedDict()
+        self.point_dict = collections.OrderedDict()
+        self.point_mask_dict = collections.OrderedDict()
         for loc in open(parts_loc_file):
             values = loc.split()
             id_ = int(values[0]) - 1
 
-            if id_ not in self.kp_dict:
-                self.kp_dict[id_] = list()
-            if id_ not in self.kp_mask_dict:
-                self.kp_mask_dict[id_] = list()
+            if id_ not in self.point_dict:
+                self.point_dict[id_] = list()
+            if id_ not in self.point_mask_dict:
+                self.point_mask_dict[id_] = list()
 
             # (y, x) order
-            keypoint = [float(v) for v in values[3:1:-1]]
-            kp_mask = bool(int(values[4]))
+            point = [float(v) for v in values[3:1:-1]]
+            point_mask = bool(int(values[4]))
 
-            self.kp_dict[id_].append(keypoint)
-            self.kp_mask_dict[id_].append(kp_mask)
+            self.point_dict[id_].append(point)
+            self.point_mask_dict[id_].append(point_mask)
 
     def get_example(self, i):
         """Returns the i-th example.
@@ -110,20 +110,20 @@ class CUBKeypointDataset(CUBDatasetBase):
         img = utils.read_image(
             os.path.join(self.data_dir, 'images', self.paths[i]),
             color=True)
-        keypoint = np.array(self.kp_dict[i], dtype=np.float32)
-        kp_mask = np.array(self.kp_mask_dict[i], dtype=np.bool)
+        point = np.array(self.point_dict[i], dtype=np.float32)
+        point_mask = np.array(self.point_mask_dict[i], dtype=np.bool)
 
         if not self.return_prob_map:
             if self.return_bb:
-                return img, keypoint, kp_mask, self.bbs[i]
+                return img, point, point_mask, self.bbs[i]
             else:
-                return img, keypoint, kp_mask
+                return img, point, point_mask
 
         prob_map = utils.read_image(self.prob_map_paths[i],
                                     dtype=np.uint8, color=False)
         prob_map = prob_map.astype(np.float32) / 255  # [0, 255] -> [0, 1]
         prob_map = prob_map[0]  # (1, H, W) --> (H, W)
         if self.return_bb:
-            return img, keypoint, kp_mask, self.bbs[i], prob_map
+            return img, point, point_mask, self.bbs[i], prob_map
         else:
-            return img, keypoint, kp_mask, prob_map
+            return img, point, point_mask, prob_map
