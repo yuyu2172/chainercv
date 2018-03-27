@@ -146,7 +146,7 @@ class ResNet(PickableSequentialChain):
     def __init__(self, n_layer,
                  n_class=None,
                  pretrained_model=None,
-                 mean=None, initialW=None, arch='fb'):
+                 mean=None, conv_initialW=None, fc_initialW=None, arch='fb'):
         if arch == 'fb':
             if pretrained_model == 'imagenet':
                 raise ValueError(
@@ -175,13 +175,15 @@ class ResNet(PickableSequentialChain):
                 mean = _imagenet_mean
         self.mean = mean
 
-        if initialW is None:
+        if conv_initialW is None:
             conv_initialW = HeNormal(scale=1., fan_option='fan_out')
+        if fc_initialW is None:
             fc_initialW = initializers.Normal(scale=0.01)
         if pretrained_model:
             # As a sampling process is time-consuming,
             # we employ a zero initializer for faster computation.
-            initialW = initializers.constant.Zero()
+            conv_initialW = initializers.constant.Zero()
+            fc_initialW = initializers.constant.Zero()
         kwargs = {'initialW': conv_initialW, 'stride_first': stride_first}
 
         super(ResNet, self).__init__()
@@ -231,10 +233,10 @@ class ResNet50(ResNet):
     """
 
     def __init__(self, n_class=None, pretrained_model=None,
-                 mean=None, initialW=None, arch='fb'):
+                 mean=None, conv_initialW=None, fc_initialW=None, arch='fb'):
         super(ResNet50, self).__init__(
             50, n_class, pretrained_model,
-            mean, initialW, arch)
+            mean, conv_initialW, fc_initialW, arch)
 
 
 class ResNet101(ResNet):
@@ -249,10 +251,10 @@ class ResNet101(ResNet):
     """
 
     def __init__(self, n_class=None, pretrained_model=None,
-                 mean=None, initialW=None, arch='fb'):
+                 mean=None, conv_initialW=None, fc_initialW=None, arch='fb'):
         super(ResNet101, self).__init__(
             101, n_class, pretrained_model,
-            mean, initialW, arch)
+            mean, conv_initialW, fc_initialW, arch)
 
 
 class ResNet152(ResNet):
@@ -267,10 +269,10 @@ class ResNet152(ResNet):
     """
 
     def __init__(self, n_class=None, pretrained_model=None,
-                 mean=None, initialW=None, arch='fb'):
+                 mean=None, conv_initialW=None, fc_initialW=None, arch='fb'):
         super(ResNet152, self).__init__(
             152, n_class, pretrained_model,
-            mean, initialW, arch)
+            mean, conv_initialW, fc_initialW, arch)
 
 
 class HeNormal(chainer.initializer.Initializer):
