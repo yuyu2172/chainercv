@@ -91,24 +91,24 @@ class BottleneckConv(chainer.Chain):
         mid_stride = chainer.config.mid_stride
         super(BottleneckConv, self).__init__()
         with self.init_scope():
-            self.conv1 = ConvBNReLU(
+            self.cbr1 = ConvBNReLU(
                 in_channels, mid_channels, 1,
                 1 if mid_downsample else stride, 0)
             if dilate > 1:
-                self.conv2 = ConvBNReLU(
+                self.cbr2 = ConvBNReLU(
                     mid_channels, mid_channels, 3, 1, dilate, dilate, initialW, comm)
             else:
-                self.conv2 = ConvBNReLU(
+                self.cbr2 = ConvBNReLU(
                     mid_channels, mid_channels, 3,
                     stride if mid_downsample else 1, 1)
-            self.conv3 = ConvBNReLU(mid_channels, out_channels, 1, 1, 0)
-            self.conv4 = ConvBNReLU(in_channels, out_channels, 1, stride, 0)
+            self.cbr3 = ConvBNReLU(mid_channels, out_channels, 1, 1, 0)
+            self.cbr4 = ConvBNReLU(in_channels, out_channels, 1, stride, 0)
 
     def __call__(self, x):
-        h = self.conv1(x)
-        h = self.conv2(h)
-        h1 = self.conv3(h, relu=False)
-        h2 = self.conv4(x, relu=False)
+        h = self.cbr1(x)
+        h = self.cbr2(h)
+        h1 = self.cbr3(h, relu=False)
+        h2 = self.cbr4(x, relu=False)
         return F.relu(h1 + h2)
 
 
@@ -118,21 +118,21 @@ class BottleneckIdentity(chainer.Chain):
                  initialW=chainer.initializers.HeNormal(), comm=None):
         super(BottleneckIdentity, self).__init__()
         with self.init_scope():
-            self.conv1 = ConvBNReLU(
+            self.cbr1 = ConvBNReLU(
                 in_channels, mid_channels, 1, 1, 0, 0, initialW, comm)
             if dilate > 1:
-                self.conv2 = ConvBNReLU(
+                self.cbr2 = ConvBNReLU(
                     mid_channels, mid_channels, 3, 1, dilate,
                     dilate, initialW, comm)
             else:
-                self.conv2 = ConvBNReLU(
+                self.cbr2 = ConvBNReLU(
                     mid_channels, mid_channels, 3, 1, 1, 0, initialW, comm)
-            self.conv3 = ConvBNReLU(mid_channels, in_channels, 1, 1, 0)
+            self.cbr3 = ConvBNReLU(mid_channels, in_channels, 1, 1, 0)
 
     def __call__(self, x):
-        h = self.conv1(x)
-        h = self.conv2(h)
-        h = self.conv3(h, relu=False)
+        h = self.cbr1(x)
+        h = self.cbr2(h)
+        h = self.cbr3(h, relu=False)
         return F.relu(h + x)
 
 
@@ -144,7 +144,7 @@ class ResBlock(chainer.ChainList):
         super(ResBlock, self).__init__()
         self.add_link(BottleneckConv(
             in_channels, mid_channels, out_channels, stride,
-            dilate, initialW, comm))
+            dilate=dilate, initialW=initialW, comm=comm))
         for _ in six.moves.xrange(1, n_layer):
             self.add_link(BottleneckIdentity(
                 out_channels, mid_channels, dilate, initialW, comm))
@@ -160,9 +160,9 @@ class DilatedFCN(chainer.Chain):
     def __init__(self, n_blocks, initialW, comm):
         super(DilatedFCN, self).__init__()
         with self.init_scope():
-            self.conv1_1 = ConvBNReLU(None, 64, 3, 2, 1, 1, initialW, comm)
-            self.conv1_2 = ConvBNReLU(64, 64, 3, 1, 1, 1, initialW, comm)
-            self.conv1_3 = ConvBNReLU(64, 128, 3, 1, 1, 1, initialW, comm)
+            self.cbr1_1 = ConvBNReLU(None, 64, 3, 2, 1, 1, initialW, comm)
+            self.cbr1_2 = ConvBNReLU(64, 64, 3, 1, 1, 1, initialW, comm)
+            self.cbr1_3 = ConvBNReLU(64, 128, 3, 1, 1, 1, initialW, comm)
             self.res2 = ResBlock(
                 n_blocks[0], 128, 64, 256, 1, 1, initialW, comm)
             self.res3 = ResBlock(
@@ -311,7 +311,7 @@ class PSPNet(chainer.Chain):
 
         with self.init_scope():
             self.input_size = input_size
-            self.extractor = DilatedFCN(n_blocks=n_blocks, initialW=initialW)
+            self.trunk = DilatedFCN(n_blocks=n_blocks, initialW=initialW, comm=comm)
 
             # To calculate auxirally loss
             self.cbr_aux = ConvBNReLU(None, 512, 3, 1, 1)
@@ -360,12 +360,12 @@ class PSPNet(chainer.Chain):
 
         """
         if self.compute_aux:
-            aux, h = self.extractor(x)
+            aux, h = self.trunk(x)
             aux = F.dropout(self.cbr_aux(aux), ratio=0.1)
             aux = self.out_aux(aux)
             aux = F.resize_images(aux, x.shape[2:])
         else:
-            h = self.extractor(x)
+            h = self.trunk(x)
 
         h = self.ppm(h)
         h = F.dropout(self.cbr_main(h), ratio=0.1)
