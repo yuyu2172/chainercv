@@ -91,7 +91,7 @@ def copy_conv(layer, config, conv, has_bias=False, inverse_ch=False):
 
 def copy_cbr(layer, config, cbr, inverse_ch=False):
     if 'Convolution' in layer.type:
-        cbr.conv = copy_conv(layer, config, cbr.conv, inverse_ch)
+        cbr.conv = copy_conv(layer, config, cbr.conv, inverse_ch=inverse_ch)
     elif 'BN' in layer.type:
         cbr.bn.eps = config.bn_param.eps
         cbr.bn.decay = config.bn_param.momentum
@@ -242,24 +242,25 @@ if __name__ == '__main__':
         }
     }
 
-    for dataset_name in ['voc2012', 'cityscapes', 'ade20k']:
-        proto_fn = settings[dataset_name]['proto_fn']
-        param_fn = settings[dataset_name]['param_fn']
-        n_class = settings[dataset_name]['n_class']
-        input_size = settings[dataset_name]['input_size']
-        n_blocks = settings[dataset_name]['n_blocks']
-        pyramids = settings[dataset_name]['pyramids']
-        mid_stride = settings[dataset_name]['mid_stride']
+    # for dataset_name in ['voc2012', 'cityscapes', 'ade20k']:
+    dataset_name = 'cityscapes'
+    proto_fn = settings[dataset_name]['proto_fn']
+    param_fn = settings[dataset_name]['param_fn']
+    n_class = settings[dataset_name]['n_class']
+    input_size = settings[dataset_name]['input_size']
+    n_blocks = settings[dataset_name]['n_blocks']
+    pyramids = settings[dataset_name]['pyramids']
+    mid_stride = settings[dataset_name]['mid_stride']
 
-        name = os.path.splitext(proto_fn)[0]
-        param_fn = os.path.join(proto_dir, param_fn)
-        proto_fn = os.path.join(proto_dir, proto_fn)
+    name = os.path.splitext(proto_fn)[0]
+    param_fn = os.path.join(proto_dir, param_fn)
+    proto_fn = os.path.join(proto_dir, proto_fn)
 
-        model = get_chainer_model(
-            n_class, input_size, n_blocks, pyramids, mid_stride)
-        param, net = get_param_net(proto_dir, param_fn, proto_fn)
-        model = transfer(model, param, net)
+    model = get_chainer_model(
+        n_class, input_size, n_blocks, pyramids, mid_stride)
+    param, net = get_param_net(proto_dir, param_fn, proto_fn)
+    model = transfer(model, param, net)
 
-        serializers.save_npz(
-            'weights/{}_reference.npz'.format(name), model)
-        print('weights/{}_reference.npz'.format(name), 'saved')
+    serializers.save_npz(
+        'weights/{}_reference.npz'.format(name), model)
+    print('weights/{}_reference.npz'.format(name), 'saved')

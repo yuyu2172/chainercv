@@ -88,7 +88,6 @@ class BottleneckConv(chainer.Chain):
             self, in_channels, mid_channels, out_channels, stride=2,
             mid_downsample=False, dilate=1,
             initialW=chainer.initializers.HeNormal(), comm=None):
-        mid_stride = chainer.config.mid_stride
         super(BottleneckConv, self).__init__()
         with self.init_scope():
             self.cbr1 = ConvBNReLU(
@@ -140,11 +139,11 @@ class ResBlock(chainer.ChainList):
 
     def __init__(
             self, n_layer, in_channels, mid_channels, out_channels, stride=1,
-            dilate=1, initialW=chainer.initializers.HeNormal(), comm=None):
+            dilate=1, initialW=chainer.initializers.HeNormal(), mid_downsample=False, comm=None):
         super(ResBlock, self).__init__()
         self.add_link(BottleneckConv(
             in_channels, mid_channels, out_channels, stride,
-            dilate=dilate, initialW=initialW, comm=comm))
+            dilate=dilate, initialW=initialW, mid_downsample=mid_downsample, comm=comm))
         for _ in six.moves.xrange(1, n_layer):
             self.add_link(BottleneckIdentity(
                 out_channels, mid_channels, dilate, initialW, comm))
@@ -157,23 +156,23 @@ class ResBlock(chainer.ChainList):
 
 class DilatedFCN(chainer.Chain):
 
-    def __init__(self, n_blocks, initialW, comm):
+    def __init__(self, n_blocks, initialW, mid_downsample, comm):
         super(DilatedFCN, self).__init__()
         with self.init_scope():
             self.cbr1_1 = ConvBNReLU(None, 64, 3, 2, 1, 1, initialW, comm)
             self.cbr1_2 = ConvBNReLU(64, 64, 3, 1, 1, 1, initialW, comm)
             self.cbr1_3 = ConvBNReLU(64, 128, 3, 1, 1, 1, initialW, comm)
             self.res2 = ResBlock(
-                n_blocks[0], 128, 64, 256, 1, 1, initialW, comm)
+                n_blocks[0], 128, 64, 256, 1, 1, initialW, mid_downsample, comm)
             self.res3 = ResBlock(
-                n_blocks[1], 256, 128, 512, 2, 1, initialW, comm)
+                n_blocks[1], 256, 128, 512, 2, 1, initialW, mid_downsample, comm)
             self.res4 = ResBlock(
-                n_blocks[2], 512, 256, 1024, 1, 2, initialW, comm)
+                n_blocks[2], 512, 256, 1024, 1, 2, initialW, mid_downsample, comm)
             self.res5 = ResBlock(
-                n_blocks[3], 1024, 512, 2048, 1, 4, initialW, comm)
+                n_blocks[3], 1024, 512, 2048, 1, 4, initialW, mid_downsample, comm)
 
     def __call__(self, x):
-        h = self.conv1_3(self.conv1_2(self.conv1_1(x)))  # 1/2
+        h = self.cbr1_3(self.cbr1_2(self.cbr1_1(x)))  # 1/2
         h = F.max_pooling_2d(h, 3, 2, 1)  # 1/4
         h = self.res2(h)
         h = self.res3(h)  # 1/8
@@ -303,15 +302,13 @@ class PSPNet(chainer.Chain):
                 mean = self._models[pretrained_model]['mean']
                 self._use_pretrained_model = True
 
-        chainer.config.mid_stride = mid_stride
-        chainer.config.comm = comm
-
         if not isinstance(input_size, (list, tuple)):
             input_size = (int(input_size), int(input_size))
 
         with self.init_scope():
             self.input_size = input_size
-            self.trunk = DilatedFCN(n_blocks=n_blocks, initialW=initialW, comm=comm)
+            self.trunk = DilatedFCN(n_blocks=n_blocks, initialW=initialW,
+                                    mid_downsample=mid_stride, comm=comm)
 
             # To calculate auxirally loss
             self.cbr_aux = ConvBNReLU(None, 512, 3, 1, 1)
@@ -326,6 +323,7 @@ class PSPNet(chainer.Chain):
                 512, n_class, 1, 1, 0, False, initialW)
 
         self.mean = mean
+        self.compute_aux = compute_aux
 
         if pretrained_model in self._models:
             path = download_model(self._models[pretrained_model]['url'])
