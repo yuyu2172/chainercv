@@ -322,7 +322,7 @@ class PSPNet(chainer.Chain):
             self.out_main = L.Convolution2D(
                 512, n_class, 1, 1, 0, False, initialW)
 
-        self.mean = mean
+        self.mean = mean.astype(np.float32)
         self.compute_aux = compute_aux
 
         if pretrained_model in self._models:
@@ -390,8 +390,7 @@ class PSPNet(chainer.Chain):
 
         """
         if self.mean is not None:
-            img -= self.mean[:, None, None]
-            img = img.astype(np.float32, copy=False)
+            img = img - self.mean[:, None, None]
         return img
 
     def _predict(self, img):
