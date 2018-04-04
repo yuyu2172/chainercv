@@ -8,13 +8,12 @@ import chainer
 import chainer.functions as F
 from chainercv import transforms
 import numpy as np
-import pspnet
-from skimage import io
+from chainercv.links import PSPNet
 
 from chainercv.datasets import ade20k_semantic_segmentation_label_colors
 from chainercv.datasets import ADE20KSemanticSegmentationDataset
 from chainercv.datasets import ADE20KTestImageDataset
-from chainercv.datasets import cityscapes_semantic_segmentation_labels
+from chainercv.datasets import cityscapes_semantic_segmentation_label_names
 from chainercv.datasets import CityscapesSemanticSegmentationDataset
 from chainercv.datasets import CityscapesTestImageDataset
 from chainercv.datasets import VOCSemanticSegmentationDataset
@@ -112,7 +111,7 @@ if __name__ == '__main__':
     assert len(dataset) > 0
 
     chainer.config.train = False
-    model = pspnet.PSPNet(n_class, input_size, n_blocks, pyramids, mid_stride,
+    model = PSPNet(n_class, input_size, n_blocks, pyramids, mid_stride,
                           mean, comm, pretrained_model)
 
     if args.gpu >= 0:
@@ -134,12 +133,13 @@ if __name__ == '__main__':
             color_out = np.zeros(
                 (pred.shape[0], pred.shape[1], 3), dtype=np.uint8)
             label_out = np.zeros_like(pred)
-            for label in cityscapes_semantic_segmentation_labels:
+            for label in cityscapes_semantic_segmentation_label_names:
                 label_out[np.where(pred == label.trainId)] = label.id
                 color_out[np.where(pred == label.trainId)] = label.color
             pred = label_out
             color_fn = out_fn.replace('.', '_color.')
-            io.imsave(color_fn, color_out)
+            print(color_out.shape)
+            # io.imsave(color_fn, color_out)
         if args.dataset == 'ade20k':
             color_out = np.zeros(
                 (pred.shape[0], pred.shape[1], 3), dtype=np.uint8)
