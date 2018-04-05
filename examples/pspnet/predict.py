@@ -14,6 +14,7 @@ from chainercv.datasets import ade20k_semantic_segmentation_label_colors
 from chainercv.datasets import ADE20KSemanticSegmentationDataset
 from chainercv.datasets import ADE20KTestImageDataset
 from chainercv.datasets import cityscapes_semantic_segmentation_label_names
+from chainercv.datasets.cityscapes.cityscapes_utils import cityscapes_labels
 from chainercv.datasets import CityscapesSemanticSegmentationDataset
 from chainercv.datasets import CityscapesTestImageDataset
 from chainercv.datasets import VOCSemanticSegmentationDataset
@@ -117,6 +118,7 @@ if __name__ == '__main__':
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu)
         model.to_gpu(args.gpu)
+    print('starting')
 
     for i in range(args.start_i, args.end_i):
         if i >= len(dataset):
@@ -133,13 +135,13 @@ if __name__ == '__main__':
             color_out = np.zeros(
                 (pred.shape[0], pred.shape[1], 3), dtype=np.uint8)
             label_out = np.zeros_like(pred)
-            for label in cityscapes_semantic_segmentation_label_names:
+            for label in cityscapes_labels:
                 label_out[np.where(pred == label.trainId)] = label.id
                 color_out[np.where(pred == label.trainId)] = label.color
             pred = label_out
             color_fn = out_fn.replace('.', '_color.')
-            print(color_out.shape)
-            # io.imsave(color_fn, color_out)
+            from skimage import io
+            io.imsave(color_fn, color_out)
         if args.dataset == 'ade20k':
             color_out = np.zeros(
                 (pred.shape[0], pred.shape[1], 3), dtype=np.uint8)
