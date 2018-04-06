@@ -15,6 +15,7 @@ except ImportError:
 
 @testing.parameterize(
     {'img': np.random.randint(0, 255, size=(3, 32, 32)).astype(np.float32)},
+    {'img': np.random.randint(0, 255, size=(1, 32, 32)).astype(np.float32)},
     {'img': None}
 )
 class TestVisImage(unittest.TestCase):
