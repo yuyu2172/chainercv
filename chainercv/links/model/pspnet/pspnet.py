@@ -1,14 +1,16 @@
 from __future__ import division
 
 from math import ceil
+import numpy as np
+import six
 import warnings
 
 import chainer
 import chainer.functions as F
 import chainer.links as L
 from chainercv.utils import download_model
-import numpy as np
-import six
+from chainercv.links.model.pspnet.transforms import convolution_crop
+
 
 try:
     from chainermn.links import MultiNodeBatchNormalization
@@ -393,11 +395,16 @@ class PSPNet(chainer.Chain):
             img = img - self.mean[:, None, None]
         return img
 
-    def _predict(self, img):
-        img = chainer.Variable(self.xp.asarray(img))
-        with chainer.using_config('train', False):
-            score = self.__call__(img)
-        return chainer.cuda.to_cpu(F.softmax(score).data)
+    def _predict(self, imgs):
+        print(imgs.shape)
+        batchsize = 1
+        scores = []
+        for i in range(0, len(imgs), batchsize):
+            var = chainer.Variable(self.xp.asarray(imgs[i:i + batchsize]))
+            with chainer.using_config('train', False):
+                scores.append(F.softmax(self.__call__(var)).data)
+        scores = self.xp.asarray(scores)
+        return chainer.cuda.to_cpu(scores)
 
     def _pad_img(self, img):
         if img.shape[1] < self.input_size[0]:
@@ -418,32 +425,53 @@ class PSPNet(chainer.Chain):
 
         # When padding input patches is needed
         if long_size > max(self.input_size):
-            count = np.zeros((ori_rows, ori_cols))
-            pred = np.zeros((1, self.n_class, ori_rows, ori_cols))
             stride_rate = 2 / 3.
-            stride = (ceil(self.input_size[0] * stride_rate),
-                      ceil(self.input_size[1] * stride_rate))
-            hh = ceil((ori_rows - self.input_size[0]) / stride[0]) + 1
-            ww = ceil((ori_cols - self.input_size[1]) / stride[1]) + 1
-            for yy in six.moves.xrange(hh):
-                for xx in six.moves.xrange(ww):
-                    sy, sx = yy * stride[0], xx * stride[1]
-                    ey, ex = sy + self.input_size[0], sx + self.input_size[1]
-                    img_sub = img[:, sy:ey, sx:ex]
-                    img_sub, pad_h, pad_w = self._pad_img(img_sub)
+            stride = (int(ceil(self.input_size[0] * stride_rate)),
+                      int(ceil(self.input_size[1] * stride_rate)))
 
-                    # Take average of pred and pred from flipped image
-                    psub1 = self._predict(img_sub[np.newaxis])
-                    psub2 = self._predict(img_sub[np.newaxis, :, :, ::-1])
-                    psub = (psub1 + psub2[:, :, :, ::-1]) / 2.
+            imgs, param = convolution_crop(img, self.input_size, stride, return_param=True)
+            # Horizontal flip
+            imgs = np.concatenate((imgs, imgs[:, :, :, ::-1]), axis=0)
+            scores = self._predict(imgs)
 
-                    if sy + self.input_size[0] > ori_rows:
-                        psub = psub[:, :, :-pad_h, :]
-                    if sx + self.input_size[1] > ori_cols:
-                        psub = psub[:, :, :, :-pad_w]
-                    pred[:, :, sy:ey, sx:ex] = psub
-                    count[sy:ey, sx:ex] += 1
-            score = (pred / count[None, None, ...]).astype(np.float32)
+            N = len(param['y_slices'])
+            # Flip horizontally flipped score maps again
+            scores[N:] = scores[N:][:, :, :, ::-1]
+
+            count = np.zeros((1, ori_rows, ori_cols), dtype=np.float32)
+            pred = np.zeros((1, self.n_class, ori_rows, ori_cols))
+            for i in range(N):
+                y_slice = param['y_slices'][i]
+                x_slice = param['x_slices'][i]
+                crop_y_slice = param['crop_y_slices'][i]
+                crop_x_slice = param['crop_x_slices'][i]
+
+                score_0 = scores[i, :, crop_y_slice, crop_x_slice]
+                pred[0, :, y_slice, x_slice] += score_0
+                score_1 = scores[N + i, :, crop_y_slice, crop_x_slice]
+                pred[0, :, y_slice, x_slice] += score_1
+                count[0, y_slice, x_slice] += 2
+            # hh = int(ceil((ori_rows - self.input_size[0]) / stride[0])) + 1
+            # ww = int(ceil((ori_cols - self.input_size[1]) / stride[1])) + 1
+            # for yy in six.moves.xrange(hh):
+            #     for xx in six.moves.xrange(ww):
+            #         sy, sx = yy * stride[0], xx * stride[1]
+            #         ey, ex = sy + self.input_size[0], sx + self.input_size[1]
+            #         img_sub = img[:, sy:ey, sx:ex]
+            #         img_sub, pad_h, pad_w = self._pad_img(img_sub)
+
+            #         # Take average of pred and pred from flipped image
+            #         psub1 = self._predict(img_sub[np.newaxis])
+            #         psub2 = self._predict(img_sub[np.newaxis, :, :, ::-1])
+            #         psub = (psub1 + psub2[:, :, :, ::-1]) / 2.
+
+            #         if sy + self.input_size[0] > ori_rows:
+            #             psub = psub[:, :, :-pad_h, :]
+            #         if sx + self.input_size[1] > ori_cols:
+            #             psub = psub[:, :, :, :-pad_w]
+            #         pred[:, :, sy:ey, sx:ex] = psub
+            #         count[sy:ey, sx:ex] += 1
+            score = pred / count[:, None]
         else:
             img, pad_h, pad_w = self._pad_img(img)
             pred1 = self._predict(img[np.newaxis])
