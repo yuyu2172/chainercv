@@ -411,6 +411,9 @@ class PSPNet(chainer.Chain):
         # Prepare should be made
         if self.mean is not None:
             img = img - self.mean[:, None, None]
+            if self._use_pretrained_model:
+                # pretrained model is trained using BGR images
+                img = img[::-1]
         ori_rows, ori_cols = img.shape[1:]
         long_size = max(ori_rows, ori_cols)
 
