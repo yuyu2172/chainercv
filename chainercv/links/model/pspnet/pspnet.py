@@ -422,34 +422,34 @@ class PSPNet(chainer.Chain):
 
             imgs, param = convolution_crop(img, self.input_size, stride, return_param=True)
             # Horizontal flip
-            imgs = np.concatenate((imgs, imgs[:, :, :, ::-1]), axis=0)
+            # imgs = np.concatenate((imgs, imgs[:, :, :, ::-1]), axis=0)
             # scores = self._predict(imgs)
 
             count = self.xp.zeros((1, ori_rows, ori_cols), dtype=np.float32)
             pred = self.xp.zeros((1, self.n_class, ori_rows, ori_cols), dtype=np.float32)
-
             N = len(param['y_slices'])
             for i in range(N):
                 print(i)
+                img_i = imgs[i:i+1]
                 y_slice = param['y_slices'][i]
                 x_slice = param['x_slices'][i]
                 crop_y_slice = param['crop_y_slices'][i]
                 crop_x_slice = param['crop_x_slices'][i]
 
-                var = chainer.Variable(self.xp.asarray(imgs[i:i+1]))
+                var = chainer.Variable(self.xp.asarray(img_i))
                 with chainer.using_config('train', False):
                     scores_i = F.softmax(self.__call__(var)).data
-                assert scores_i.shape == var.shape
+                assert scores_i.shape[2:] == var.shape[2:]
                 pred[0, :, y_slice, x_slice] += scores_i[0, :, crop_y_slice, crop_x_slice]
 
-                flipped_var = chainer.Variable(self.xp.asarray(imgs[N+i:N+i+1]))
+                # Horizontal flip
+                flipped_var = chainer.Variable(self.xp.asarray(img_i[:, :, :, ::-1]))
                 with chainer.using_config('train', False):
                     flipped_scores_i = F.softmax(self.__call__(flipped_var)).data
                 # Flip horizontally flipped score maps again
                 flipped_scores_i = flipped_scores_i[:, :, :, ::-1]
                 pred[0, :, y_slice, x_slice] +=\
                     flipped_scores_i[0, :, crop_y_slice, crop_x_slice]
-
                 count[0, y_slice, x_slice] += 2
 
             # scores[N:] = scores[N:][:, :, :, ::-1]
