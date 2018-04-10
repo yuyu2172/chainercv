@@ -400,26 +400,17 @@ class PSPNet(chainer.Chain):
         batchsize = 1
         scores = []
         for i in range(0, len(imgs), batchsize):
+            print(i)
             var = chainer.Variable(self.xp.asarray(imgs[i:i + batchsize]))
             with chainer.using_config('train', False):
                 scores.append(F.softmax(self.__call__(var)).data)
         scores = self.xp.asarray(scores)
         return chainer.cuda.to_cpu(scores)
 
-    def _pad_img(self, img):
-        if img.shape[1] < self.input_size[0]:
-            pad_h = self.input_size[0] - img.shape[1]
-            img = np.pad(img, ((0, 0), (0, pad_h), (0, 0)), 'constant')
-        else:
-            pad_h = 0
-        if img.shape[2] < self.input_size[1]:
-            pad_w = self.input_size[1] - img.shape[2]
-            img = np.pad(img, ((0, 0), (0, 0), (0, pad_w)), 'constant')
-        else:
-            pad_w = 0
-        return img, pad_h, pad_w
-
     def _tile_predict(self, img):
+        # Prepare should be made
+        if self.mean is not None:
+            img = img - self.mean[:, None, None]
         ori_rows, ori_cols = img.shape[1:]
         long_size = max(ori_rows, ori_cols)
 
@@ -432,25 +423,48 @@ class PSPNet(chainer.Chain):
             imgs, param = convolution_crop(img, self.input_size, stride, return_param=True)
             # Horizontal flip
             imgs = np.concatenate((imgs, imgs[:, :, :, ::-1]), axis=0)
-            scores = self._predict(imgs)
+            # scores = self._predict(imgs)
+
+            count = self.xp.zeros((1, ori_rows, ori_cols), dtype=np.float32)
+            pred = self.xp.zeros((1, self.n_class, ori_rows, ori_cols), dtype=np.float32)
 
             N = len(param['y_slices'])
-            # Flip horizontally flipped score maps again
-            scores[N:] = scores[N:][:, :, :, ::-1]
-
-            count = np.zeros((1, ori_rows, ori_cols), dtype=np.float32)
-            pred = np.zeros((1, self.n_class, ori_rows, ori_cols))
             for i in range(N):
+                print(i)
                 y_slice = param['y_slices'][i]
                 x_slice = param['x_slices'][i]
                 crop_y_slice = param['crop_y_slices'][i]
                 crop_x_slice = param['crop_x_slices'][i]
 
-                score_0 = scores[i, :, crop_y_slice, crop_x_slice]
-                pred[0, :, y_slice, x_slice] += score_0
-                score_1 = scores[N + i, :, crop_y_slice, crop_x_slice]
-                pred[0, :, y_slice, x_slice] += score_1
+                var = chainer.Variable(self.xp.asarray(imgs[i:i+1]))
+                with chainer.using_config('train', False):
+                    scores_i = F.softmax(self.__call__(var)).data
+                pred[0, :, y_slice, x_slice] += scores_i[0, :, crop_y_slice, crop_x_slice]
+
+                flipped_var = chainer.Variable(self.xp.asarray(imgs[N+i:N+i+1]))
+                with chainer.using_config('train', False):
+                    flipped_scores_i = F.softmax(self.__call__(flipped_var)).data
+                # Flip horizontally flipped score maps again
+                flipped_scores_i = flipped_scores_i[:, :, :, ::-1]
+                pred[0, :, y_slice, x_slice] +=\
+                    flipped_scores_i[0, :, crop_y_slice, crop_x_slice]
+
                 count[0, y_slice, x_slice] += 2
+
+            # scores[N:] = scores[N:][:, :, :, ::-1]
+
+            # for i in range(N):
+            #     y_slice = param['y_slices'][i]
+            #     x_slice = param['x_slices'][i]
+            #     crop_y_slice = param['crop_y_slices'][i]
+            #     crop_x_slice = param['crop_x_slices'][i]
+
+            #     score_0 = scores[i, :, crop_y_slice, crop_x_slice]
+            #     pred[0, :, y_slice, x_slice] += score_0
+            #     score_1 = scores[N + i, :, crop_y_slice, crop_x_slice]
+            #     pred[0, :, y_slice, x_slice] += score_1
+            #     count[0, y_slice, x_slice] += 2
+            # print('aaaa')
             # hh = int(ceil((ori_rows - self.input_size[0]) / stride[0])) + 1
             # ww = int(ceil((ori_cols - self.input_size[1]) / stride[1])) + 1
             # for yy in six.moves.xrange(hh):
@@ -473,14 +487,15 @@ class PSPNet(chainer.Chain):
             #         count[sy:ey, sx:ex] += 1
             score = pred / count[:, None]
         else:
-            img, pad_h, pad_w = self._pad_img(img)
-            pred1 = self._predict(img[np.newaxis])
-            pred2 = self._predict(img[np.newaxis, :, :, ::-1])
-            pred = (pred1 + pred2[:, :, :, ::-1]) / 2.
-            score = pred[
-                :, :, :self.input_size[0] - pad_h, :self.input_size[1] - pad_w]
+            raise ValueError("Not supported\n")
+            # img, pad_h, pad_w = self._pad_img(img)
+            # pred1 = self._predict(img[np.newaxis])
+            # pred2 = self._predict(img[np.newaxis, :, :, ::-1])
+            # pred = (pred1 + pred2[:, :, :, ::-1]) / 2.
+            # score = pred[
+            #     :, :, :self.input_size[0] - pad_h, :self.input_size[1] - pad_w]
         score = F.resize_images(score, (ori_rows, ori_cols))[0].data
-        return score / score.sum(axis=0)
+        return score
 
     def predict(self, imgs, argmax=True):
         """Conduct semantic segmentation from images.
@@ -503,10 +518,8 @@ class PSPNet(chainer.Chain):
         labels = []
         for img in imgs:
             with chainer.using_config('train', False):
-                x = self.prepare(img)
-                score = self._tile_predict(x)
-            label = chainer.cuda.to_cpu(score)
-            if argmax:
-                label = np.argmax(score, axis=0).astype(np.int32)
-            labels.append(label)
+                # x = self.prepare(img)
+                score = self._tile_predict(img)
+            score = chainer.cuda.to_cpu(score)
+            labels.append(np.argmax(score, axis=0).astype(np.int32))
         return labels

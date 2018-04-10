@@ -1,6 +1,7 @@
 import argparse
 
 import matplotlib.pyplot as plot
+import numpy as np
 
 import chainer
 from chainercv.datasets import ade20k_semantic_segmentation_label_colors
@@ -48,10 +49,13 @@ if __name__ == '__main__':
     labels = model.predict([img])
     label = labels[0]
 
-    fig = plot.figure()
-    ax1 = fig.add_subplot(1, 2, 1)
-    vis_image(img, ax=ax1)
-    ax2 = fig.add_subplot(1, 2, 2)
-    vis_semantic_segmentation(
-        label, label_names, colors, ax=ax2)
-    plot.show()
+    print(type(label))
+    np.save('label.npy', label)
+
+    # fig = plot.figure()
+    # ax1 = fig.add_subplot(1, 2, 1)
+    # vis_image(img, ax=ax1)
+    # ax2 = fig.add_subplot(1, 2, 2)
+    # vis_semantic_segmentation(
+    #     label, label_names, colors, ax=ax2)
+    # plot.show()

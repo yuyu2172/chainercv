@@ -44,7 +44,7 @@ def convolution_crop(img, size, stride, return_param=False):
 
     if return_param:
         param = {'y_slices': y_slices, 'x_slices': x_slices,
-                 'crop_y_slices': crop_y_slice, 'crop_x_slices': crop_x_slices}
+                 'crop_y_slices': crop_y_slices, 'crop_x_slices': crop_x_slices}
         return np.array(crop_imgs), param
     else:
         return np.array(crop_imgs)
