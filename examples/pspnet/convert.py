@@ -16,7 +16,7 @@ import caffe_pb2
 def get_chainer_model(n_class, input_size, n_blocks, pyramids, mid_stride):
     with chainer.using_config('train', True):
         model = PSPNet(
-            n_class, input_size, n_blocks, pyramids, mid_stride)
+            n_class, input_size, n_blocks, pyramids, mid_stride, mean=np.array([0, 0, 0]))
         model(np.random.rand(1, 3, input_size, input_size).astype(np.float32))
     size = 0
     for param in model.params():
@@ -104,6 +104,21 @@ def copy_cbr(layer, config, cbr, inverse_ch=False):
     return cbr
 
 
+def copy_conv2d_bn_activ(layer, config, cba, inverse_ch=False):
+    if 'Convolution' in layer.type:
+        cba.conv = copy_conv(layer, config, cba.conv, inverse_ch=inverse_ch)
+    elif 'BN' in layer.type:
+        cba.bn.eps = config.bn_param.eps
+        cba.bn.decay = config.bn_param.momentum
+        cba.bn.gamma.data.ravel()[:] = np.array(layer.blobs[0].data).ravel()
+        cba.bn.beta.data.ravel()[:] = np.array(layer.blobs[1].data).ravel()
+        cba.bn.avg_mean.ravel()[:] = np.array(layer.blobs[2].data).ravel()
+        cba.bn.avg_var.ravel()[:] = np.array(layer.blobs[3].data).ravel()
+    else:
+        print('Ignored: {} ({})'.format(layer.name, layer.type))
+    return cba
+
+
 def copy_head(layer, config, block):
     if layer.name.startswith('conv1_1'):
         block.cbr1_1 = copy_cbr(layer, config, block.cbr1_1, inverse_ch=True)
@@ -148,7 +163,7 @@ def copy_ppm_module(layer, config, block):
          2: 2,
          3: 1,
          6: 0}[i]
-    block._children[i] = copy_cbr(layer, config, block[i])
+    block._children[i] = copy_cba(layer, config, block[i])
     return block
 
 

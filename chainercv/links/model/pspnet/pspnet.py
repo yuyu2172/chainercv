@@ -11,6 +11,7 @@ import chainer.links as L
 
 from chainercv import transforms
 from chainercv.utils import download_model
+from chainercv.links import Conv2DBNActiv
 from chainercv.links.model.pspnet.transforms import convolution_crop
 
 
@@ -54,19 +55,20 @@ class PyramidPoolingModule(chainer.ChainList):
 
     def __init__(self, in_channels, feat_size, pyramids,
                  initialW=chainer.initializers.HeNormal(), comm=None):
+        out_channels = in_channels // len(pyramids)
         super(PyramidPoolingModule, self).__init__(
-            ConvBNReLU(
-                in_channels, in_channels // len(pyramids), 1, 1, 0, 1,
-                initialW, comm),
-            ConvBNReLU(
-                in_channels, in_channels // len(pyramids), 1, 1, 0, 1,
-                initialW, comm),
-            ConvBNReLU(
-                in_channels, in_channels // len(pyramids), 1, 1, 0, 1,
-                initialW, comm),
-            ConvBNReLU(
-                in_channels, in_channels // len(pyramids), 1, 1, 0, 1,
-                initialW, comm)
+            Conv2DBNActiv(
+                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
+                bn_kwargs={'comm': comm}),
+            Conv2DBNActiv(
+                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
+                bn_kwargs={'comm': comm}),
+            Conv2DBNActiv(
+                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
+                bn_kwargs={'comm': comm}),
+            Conv2DBNActiv(
+                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
+                bn_kwargs={'comm': comm})
         )
         if isinstance(feat_size, int):
             self.ksizes = (feat_size // np.array(pyramids)).tolist()
