@@ -381,36 +381,6 @@ class PSPNet(chainer.Chain):
         else:
             return h
 
-    def prepare(self, img):
-        """Preprocess an image for feature extraction.
-
-        The image is subtracted by a mean image value :obj:`self.mean`.
-
-        Args:
-            img (~numpy.ndarray): An image. This is in CHW and RGB format.
-                The range of its value is :math:`[0, 255]`.
-
-        Returns:
-            ~numpy.ndarray:
-            A preprocessed image.
-
-        """
-        if self.mean is not None:
-            img = img - self.mean[:, None, None]
-        return img
-
-    def _predict(self, imgs):
-        print(imgs.shape)
-        batchsize = 1
-        scores = []
-        for i in range(0, len(imgs), batchsize):
-            print(i)
-            var = chainer.Variable(self.xp.asarray(imgs[i:i + batchsize]))
-            with chainer.using_config('train', False):
-                scores.append(F.softmax(self.__call__(var)).data)
-        scores = self.xp.asarray(scores)
-        return chainer.cuda.to_cpu(scores)
-
     def _tile_predict(self, img):
         # Prepare should be made
         if self.mean is not None:
@@ -436,7 +406,6 @@ class PSPNet(chainer.Chain):
             pred = self.xp.zeros((1, self.n_class, ori_rows, ori_cols), dtype=np.float32)
             N = len(param['y_slices'])
             for i in range(N):
-                print(i)
                 img_i = imgs[i:i+1]
                 y_slice = param['y_slices'][i]
                 x_slice = param['x_slices'][i]
@@ -524,8 +493,12 @@ class PSPNet(chainer.Chain):
         labels = []
         for img in imgs:
             with chainer.using_config('train', False):
-                scores = _multiscale_predict(self._tile_predict, img, self.scales)
-            labels.append(chainer.cuda.to_cpu(self.xp.argmax(scores, axis=0)))
+                if self.scales is not None:
+                    scores = _multiscale_predict(self._tile_predict, img, self.scales)
+                else:
+                    scores = self._tile_predict(img)
+            labels.append(chainer.cuda.to_cpu(
+                self.xp.argmax(scores, axis=0).astype(np.int32)))
         return labels
 
 
@@ -539,12 +512,12 @@ def _multiscale_predict(predict_method, img, scales):
             img = transforms.resize(
                 img, (int(orig_H * scale), int(orig_W * scale)))
         # This method should return scores
-        y = predict_method(img)
-        assert y.shape[1:] == img.shape[1:]
+        y = predict_method(img)[None]
+        assert y.shape[2:] == img.shape[1:]
 
         if scale != 1.0:
-            y = F.resize_images(y, (H, W)).data
+            y = F.resize_images(y, (orig_H, orig_W)).data
         scores.append(y)
     xp = chainer.cuda.get_array_module(scores[0])
     scores = xp.stack(scores)
-    return scores.mean(0)  # (1, C, H, W)
+    return scores.mean(0)[0]  # (C, H, W)

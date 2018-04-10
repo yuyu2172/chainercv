@@ -128,7 +128,12 @@ if __name__ == '__main__':
             img = img[0]
         out_fn = os.path.join(
             args.out_dir, os.path.basename(dataset.img_paths[i]))
-        pred = inference(model, n_class, img, scales)
+        model.scales = scales
+        import time
+        start = time.time()
+        pred = model.predict([img])[0]
+        print('ID={}/{}   elapsed time {}ms'.format(i, args.end_i, (time.time() - start) * 1000))
+        # pred = inference(model, n_class, img, scales)
         assert pred.ndim == 2
 
         if args.dataset == 'cityscapes':
