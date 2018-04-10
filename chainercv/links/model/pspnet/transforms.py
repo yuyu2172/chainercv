@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 import math
 
@@ -5,8 +7,8 @@ import math
 def convolution_crop(img, size, stride, return_param=False):
     _, H, W = img.shape
 
-    hh = int(math.ceil((H - size[0]) / stride[0])) + 2
-    ww = int(math.ceil((W - size[1]) / stride[1])) + 2
+    hh = int(math.ceil((H - size[0]) / stride[0])) + 1
+    ww = int(math.ceil((W - size[1]) / stride[1])) + 1
 
     start_y = -(size[0] + stride[0] * (hh - 1) - H) // 2
     start_x = -(size[1] + stride[1] * (ww - 1) - W) // 2
