@@ -116,7 +116,7 @@ if __name__ == '__main__':
                           mean, comm, pretrained_model)
 
     if args.gpu >= 0:
-        chainer.cuda.get_device_from_id(args.gpu)
+        chainer.cuda.get_device_from_id(args.gpu).use()
         model.to_gpu(args.gpu)
     print('starting')
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
         import time
         start = time.time()
         pred = model.predict([img])[0]
-        print('ID={}/{}   elapsed time {}ms'.format(i, args.end_i, (time.time() - start) * 1000))
+        print('ID={}/{}   elapsed time {}s'.format(i, args.end_i, time.time() - start))
         # pred = inference(model, n_class, img, scales)
         assert pred.ndim == 2
 

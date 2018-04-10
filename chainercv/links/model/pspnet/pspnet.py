@@ -492,7 +492,8 @@ class PSPNet(chainer.Chain):
         """
         labels = []
         for img in imgs:
-            with chainer.using_config('train', False):
+            with chainer.using_config('train', False), \
+                    chainer.function.no_backprop_mode():
                 if self.scales is not None:
                     scores = _multiscale_predict(self._tile_predict, img, self.scales)
                 else:
