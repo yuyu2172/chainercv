@@ -505,14 +505,12 @@ class PSPNet(chainer.Chain):
         score = F.resize_images(score, (ori_rows, ori_cols))[0].data
         return score
 
-    def predict(self, imgs, argmax=True):
+    def predict(self, imgs):
         """Conduct semantic segmentation from images.
 
         Args:
             imgs (iterable of numpy.ndarray): Arrays holding images.
                 All images should be in CHW order.
-            argmax (bool): Whether it performs argmax to the output label
-                predictions over the channel axis or not. The default is True.
 
         Returns:
             list of numpy.ndarray: List of predictions from each image in the
@@ -526,7 +524,7 @@ class PSPNet(chainer.Chain):
         labels = []
         for img in imgs:
             with chainer.using_config('train', False):
-                scores = _multiscale_predict(self._tile_predict, img, scales)
+                scores = _multiscale_predict(self._tile_predict, img, self.scales)
             labels.append(chainer.cuda.to_cpu(self.xp.argmax(scores, axis=0)))
         return labels
 
@@ -541,11 +539,12 @@ def _multiscale_predict(predict_method, img, scales):
             img = transforms.resize(
                 img, (int(orig_H * scale), int(orig_W * scale)))
         # This method should return scores
-        y = predict_method([img])
+        y = predict_method(img)
         assert y.shape[1:] == img.shape[1:]
 
         if scale != 1.0:
             y = F.resize_images(y, (H, W)).data
         scores.append(y)
     xp = chainer.cuda.get_array_module(scores[0])
-    return xp.array(scores).mean(0)  # (1, C, H, W)
+    scores = xp.stack(scores)
+    return scores.mean(0)  # (1, C, H, W)
