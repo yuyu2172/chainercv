@@ -16,7 +16,7 @@ import caffe_pb2
 def get_chainer_model(n_class, input_size, n_blocks, pyramids, mid_stride):
     with chainer.using_config('train', True):
         model = PSPNet(
-            n_class, input_size, n_blocks, pyramids, mid_stride, mean=np.array([0, 0, 0]))
+            n_class, input_size, n_blocks, mean=np.array([0, 0, 0]))
         model(np.random.rand(1, 3, input_size, input_size).astype(np.float32))
     size = 0
     for param in model.params():
@@ -193,10 +193,11 @@ def transfer(model, param, net):
         elif layer.name.startswith('conv5_3') and 'pool' in layer.name:
             model.ppm = copy_ppm_module(layer, config, model.ppm)
         elif layer.name.startswith('conv5_4'):
-            model.cbr_main = copy_cbr(layer, config, model.cbr_main)
+            model.main_conv1 = copy_cbr(layer, config, model.main_conv1)
         elif layer.name.startswith('conv6'):
-            model.out_main = copy_conv(
-                layer, config, model.out_main, has_bias=True)
+            model.main_conv2 = copy_conv(
+                layer, config, model.main_conv2, has_bias=True)
+        # NOTE: Auxirillary is not copied
         else:
             print('Ignored: {} ({})'.format(layer.name, layer.type))
     return model

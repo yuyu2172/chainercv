@@ -27,7 +27,9 @@ if __name__ == '__main__':
 
     chainer.config.train = False
 
-    model = PSPNet(pretrained_model=args.pretrained_model)
+    input_size = (713, 713)
+    n_blocks = [3, 4, 23, 3]
+    model = PSPNet(pretrained_model=args.pretrained_model, input_size, n_blocks)
     if args.pretrained_model == 'voc2012':
         label_names = voc_semantic_segmentation_label_names
         colors = voc_semantic_segmentation_label_colors

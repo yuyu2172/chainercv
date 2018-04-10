@@ -15,21 +15,13 @@ from chainercv.links import Conv2DBNActiv
 from chainercv.links.model.pspnet.transforms import convolution_crop
 
 
-try:
-    from chainermn.links import MultiNodeBatchNormalization
-except Exception:
-    warnings.warn('To perform batch normalization with multiple GPUs or '
-                  'multiple nodes, MultiNodeBatchNormalization link is '
-                  'needed. Please install ChainerMN: '
-                  'pip install pip install git+git://github.com/chainer/'
-                  'chainermn.git@distributed-batch-normalization')
-
-
 class ConvBNReLU(chainer.Chain):
 
     def __init__(
             self, in_channels, out_channels, ksize, stride=1, pad=1,
             dilate=1, initialW=chainer.initializers.HeNormal(), comm=None):
+
+        from chainermn.links import MultiNodeBatchNormalization
         super(ConvBNReLU, self).__init__()
         with self.init_scope():
             if dilate > 1:
@@ -197,9 +189,6 @@ class PSPNet(chainer.Chain):
             'input_size': (473, 473),
             'n_blocks': [3, 4, 23, 3],
             'feat_size': 60,
-            'mid_stride': True,
-            'pyramids': [6, 3, 2, 1],
-            'mean': np.array([123.68, 116.779, 103.939]),
             'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
                    '/ChainerCV_PSPNet/pspnet101_VOC2012_473_reference.npz'
         },
@@ -208,9 +197,6 @@ class PSPNet(chainer.Chain):
             'input_size': (713, 713),
             'n_blocks': [3, 4, 23, 3],
             'feat_size': 90,
-            'mid_stride': True,
-            'pyramids': [6, 3, 2, 1],
-            'mean': np.array([123.68, 116.779, 103.939]),
             'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
                    '/ChainerCV_PSPNet/pspnet101_cityscapes_713_reference.npz'
         },
@@ -219,20 +205,20 @@ class PSPNet(chainer.Chain):
             'input_size': (473, 473),
             'n_blocks': [3, 4, 6, 3],
             'feat_size': 60,
-            'mid_stride': True,
-            'pyramids': [6, 3, 2, 1],
-            'mean': np.array([123.68, 116.779, 103.939]),
             'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
                    '/ChainerCV_PSPNet/pspnet50_ADE20K_473_reference.npz'
         }
     }
 
     def __init__(self, n_class=None, input_size=None, n_blocks=None,
-                 pyramids=None, mid_stride=None, mean=None, comm=None,
+                 mean=None, comm=None,
                  pretrained_model=None,
                  initialW=chainer.initializers.HeNormal(),
                  compute_aux=True):
         super(PSPNet, self).__init__()
+        mid_stride = True
+        pyramids = [6, 3, 2, 1]
+        mean = np.array([123.68, 116.779, 103.939])
 
         if pretrained_model in self._models:
             if 'n_class' in self._models[pretrained_model]:
@@ -241,13 +227,8 @@ class PSPNet(chainer.Chain):
                 input_size = self._models[pretrained_model]['input_size']
             if 'n_blocks' in self._models[pretrained_model]:
                 n_blocks = self._models[pretrained_model]['n_blocks']
-            if 'pyramids' in self._models[pretrained_model]:
-                pyramids = self._models[pretrained_model]['pyramids']
-            if 'mid_stride' in self._models[pretrained_model]:
-                mid_stride = self._models[pretrained_model]['mid_stride']
-            if 'mean' in self._models[pretrained_model]:
-                mean = self._models[pretrained_model]['mean']
-                self._use_pretrained_model = True
+            self._use_pretrained_model = True
+
 
         if not isinstance(input_size, (list, tuple)):
             input_size = (int(input_size), int(input_size))
@@ -258,15 +239,19 @@ class PSPNet(chainer.Chain):
                                     mid_downsample=mid_stride, comm=comm)
 
             # To calculate auxirally loss
-            self.cbr_aux = ConvBNReLU(None, 512, 3, 1, 1)
-            self.out_aux = L.Convolution2D(
+            # Perhaps, this should not be placed here
+            self.aux_conv1 = Conv2DBNActiv(None, 512, 3, 1, 1, initialW=initialW)
+            self.aux_conv2 = L.Convolution2D(
                 512, n_class, 3, 1, 1, False, initialW)
 
             # Main branch
+            # 713 // 8 != 90 ... Is it OK? --> Fix it
             feat_size = (input_size[0] // 8, input_size[1] // 8)
-            self.ppm = PyramidPoolingModule(2048, feat_size, pyramids)
-            self.cbr_main = ConvBNReLU(4096, 512, 3, 1, 1)
-            self.out_main = L.Convolution2D(
+            self.ppm = PyramidPoolingModule(2048, feat_size, pyramids,
+                                            initialW=initialW, comm=comm)
+            self.main_conv1 = Conv2DBNActiv(4096, 512, 3, 1, 1,
+                                            initialW=initialW)
+            self.main_conv2 = L.Convolution2D(
                 512, n_class, 1, 1, 0, False, initialW)
 
         # scales = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
@@ -308,15 +293,15 @@ class PSPNet(chainer.Chain):
         """
         if self.compute_aux:
             aux, h = self.trunk(x)
-            aux = F.dropout(self.cbr_aux(aux), ratio=0.1)
-            aux = self.out_aux(aux)
+            aux = F.dropout(self.aux_conv1(aux), ratio=0.1)
+            aux = self.aux_conv2(aux)
             aux = F.resize_images(aux, x.shape[2:])
         else:
             h = self.trunk(x)
 
         h = self.ppm(h)
-        h = F.dropout(self.cbr_main(h), ratio=0.1)
-        h = self.out_main(h)
+        h = F.dropout(self.main_conv1(h), ratio=0.1)
+        h = self.main_conv2(h)
         h = F.resize_images(h, x.shape[2:])
 
         if chainer.config.train:
