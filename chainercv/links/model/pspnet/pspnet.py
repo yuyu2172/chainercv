@@ -439,6 +439,7 @@ class PSPNet(chainer.Chain):
                 var = chainer.Variable(self.xp.asarray(imgs[i:i+1]))
                 with chainer.using_config('train', False):
                     scores_i = F.softmax(self.__call__(var)).data
+                assert scores_i.shape == var.shape
                 pred[0, :, y_slice, x_slice] += scores_i[0, :, crop_y_slice, crop_x_slice]
 
                 flipped_var = chainer.Variable(self.xp.asarray(imgs[N+i:N+i+1]))
