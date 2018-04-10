@@ -159,26 +159,39 @@ class ResBlock(chainer.ChainList):
             x = f(x)
         return x
 
+from chainercv.links.model.resnet import ResBlock
 
 class DilatedFCN(chainer.Chain):
 
     def __init__(self, n_blocks, initialW, mid_downsample, comm):
+        bn_kwargs = {'comm': comm}
+        stride_first = not mid_downsample
         super(DilatedFCN, self).__init__()
         with self.init_scope():
-            self.cbr1_1 = ConvBNReLU(None, 64, 3, 2, 1, 1, initialW, comm)
-            self.cbr1_2 = ConvBNReLU(64, 64, 3, 1, 1, 1, initialW, comm)
-            self.cbr1_3 = ConvBNReLU(64, 128, 3, 1, 1, 1, initialW, comm)
+            self.conv1_1 = Conv2DBNActiv(
+                None, 64, 3, 2, 1, 1,
+                initialW=initialW, bn_kwargs=bn_kwargs)
+            self.conv1_2 = Conv2DBNActiv(
+                64, 64, 3, 1, 1, 1,
+                initialW=initialW, bn_kwargs=bn_kwargs)
+            self.conv1_3 = Conv2DBNActiv(
+                64, 128, 3, 1, 1, 1,
+                initialW=initialW, bn_kwargs=bn_kwargs)
             self.res2 = ResBlock(
-                n_blocks[0], 128, 64, 256, 1, 1, initialW, mid_downsample, comm)
+                n_blocks[0], 128, 64, 256, 1, 1,
+                initialW, bn_kwargs, stride_first)
             self.res3 = ResBlock(
-                n_blocks[1], 256, 128, 512, 2, 1, initialW, mid_downsample, comm)
+                n_blocks[1], 256, 128, 512, 2, 1,
+                initialW, bn_kwargs, stride_first)
             self.res4 = ResBlock(
-                n_blocks[2], 512, 256, 1024, 1, 2, initialW, mid_downsample, comm)
+                n_blocks[2], 512, 256, 1024, 1, 2,
+                initialW, bn_kwargs, stride_first)
             self.res5 = ResBlock(
-                n_blocks[3], 1024, 512, 2048, 1, 4, initialW, mid_downsample, comm)
+                n_blocks[3], 1024, 512, 2048, 1, 4,
+                initialW, bn_kwargs, stride_first)
 
     def __call__(self, x):
-        h = self.cbr1_3(self.cbr1_2(self.cbr1_1(x)))  # 1/2
+        h = self.conv1_3(self.conv1_2(self.conv1_1(x)))  # 1/2
         h = F.max_pooling_2d(h, 3, 2, 1)  # 1/4
         h = self.res2(h)
         h = self.res3(h)  # 1/8

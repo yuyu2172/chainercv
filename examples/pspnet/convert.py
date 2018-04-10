@@ -121,11 +121,11 @@ def copy_conv2d_bn_activ(layer, config, cba, inverse_ch=False):
 
 def copy_head(layer, config, block):
     if layer.name.startswith('conv1_1'):
-        block.cbr1_1 = copy_cbr(layer, config, block.cbr1_1, inverse_ch=True)
+        block.conv1_1 = copy_cbr(layer, config, block.conv1_1, inverse_ch=True)
     elif layer.name.startswith('conv1_2'):
-        block.cbr1_2 = copy_cbr(layer, config, block.cbr1_2)
+        block.conv1_2 = copy_cbr(layer, config, block.conv1_2)
     elif layer.name.startswith('conv1_3'):
-        block.cbr1_3 = copy_cbr(layer, config, block.cbr1_3)
+        block.conv1_3 = copy_cbr(layer, config, block.conv1_3)
     else:
         print('Ignored: {} ({})'.format(layer.name, layer.type))
     return block
@@ -133,13 +133,13 @@ def copy_head(layer, config, block):
 
 def copy_bottleneck(layer, config, block):
     if 'reduce' in layer.name:
-        block.cbr1 = copy_cbr(layer, config, block.cbr1)
+        block.conv1 = copy_cbr(layer, config, block.conv1)
     elif '3x3' in layer.name:
-        block.cbr2 = copy_cbr(layer, config, block.cbr2)
+        block.conv2 = copy_cbr(layer, config, block.conv2)
     elif 'increase' in layer.name:
-        block.cbr3 = copy_cbr(layer, config, block.cbr3)
+        block.conv3 = copy_cbr(layer, config, block.conv3)
     elif 'proj' in layer.name:
-        block.cbr4 = copy_cbr(layer, config, block.cbr4)
+        block.residual_conv = copy_cbr(layer, config, block.residual_conv)
     else:
         print('Ignored: {} ({})'.format(layer.name, layer.type))
     return block
@@ -149,7 +149,12 @@ def copy_resblock(layer, config, block):
     if '/' in layer.name:
         layer.name = layer.name.split('/')[0]
     i = int(layer.name.split('_')[1]) - 1
-    block._children[i] = copy_bottleneck(layer, config, block[i])
+    if i == 0:
+        name = 'a'
+    else:
+        name = 'b{}'.format(i)
+    setattr(block, name,
+            copy_bottleneck(layer, config, getattr(block, name)))
     return block
 
 
@@ -163,7 +168,7 @@ def copy_ppm_module(layer, config, block):
          2: 2,
          3: 1,
          6: 0}[i]
-    block._children[i] = copy_cba(layer, config, block[i])
+    block._children[i] = copy_conv2d_bn_activ(layer, config, block[i])
     return block
 
 
