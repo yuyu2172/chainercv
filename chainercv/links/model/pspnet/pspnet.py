@@ -12,6 +12,7 @@ import chainer.links as L
 from chainercv import transforms
 from chainercv.utils import download_model
 from chainercv.links import Conv2DBNActiv
+from chainercv.links.model.resnet import ResBlock
 from chainercv.links.model.pspnet.transforms import convolution_crop
 
 
@@ -79,11 +80,10 @@ class PyramidPoolingModule(chainer.ChainList):
             ys.append(y)
         return F.concat(ys, axis=1)
 
-from chainercv.links.model.resnet import ResBlock
 
 class DilatedFCN(chainer.Chain):
 
-    def __init__(self, n_blocks, initialW, mid_downsample, comm):
+    def __init__(self, n_block, initialW, mid_downsample, comm):
         bn_kwargs = {'comm': comm}
         stride_first = not mid_downsample
         super(DilatedFCN, self).__init__()
@@ -98,16 +98,16 @@ class DilatedFCN(chainer.Chain):
                 64, 128, 3, 1, 1, 1,
                 initialW=initialW, bn_kwargs=bn_kwargs)
             self.res2 = ResBlock(
-                n_blocks[0], 128, 64, 256, 1, 1,
+                n_block[0], 128, 64, 256, 1, 1,
                 initialW, bn_kwargs, stride_first)
             self.res3 = ResBlock(
-                n_blocks[1], 256, 128, 512, 2, 1,
+                n_block[1], 256, 128, 512, 2, 1,
                 initialW, bn_kwargs, stride_first)
             self.res4 = ResBlock(
-                n_blocks[2], 512, 256, 1024, 1, 2,
+                n_block[2], 512, 256, 1024, 1, 2,
                 initialW, bn_kwargs, stride_first)
             self.res5 = ResBlock(
-                n_blocks[3], 1024, 512, 2048, 1, 4,
+                n_block[3], 1024, 512, 2048, 1, 4,
                 initialW, bn_kwargs, stride_first)
 
     def __call__(self, x):
@@ -183,59 +183,23 @@ class PSPNet(chainer.Chain):
 
     """
 
-    _models = {
-        'voc2012': {
-            'n_class': 21,
-            'input_size': (473, 473),
-            'n_blocks': [3, 4, 23, 3],
-            'feat_size': 60,
-            'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
-                   '/ChainerCV_PSPNet/pspnet101_VOC2012_473_reference.npz'
-        },
-        'cityscapes': {
-            'n_class': 19,
-            'input_size': (713, 713),
-            'n_blocks': [3, 4, 23, 3],
-            'feat_size': 90,
-            'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
-                   '/ChainerCV_PSPNet/pspnet101_cityscapes_713_reference.npz'
-        },
-        'ade20k': {
-            'n_class': 150,
-            'input_size': (473, 473),
-            'n_blocks': [3, 4, 6, 3],
-            'feat_size': 60,
-            'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
-                   '/ChainerCV_PSPNet/pspnet50_ADE20K_473_reference.npz'
-        }
-    }
-
-    def __init__(self, n_class=None, input_size=None, n_blocks=None,
-                 mean=None, comm=None,
-                 pretrained_model=None,
-                 initialW=chainer.initializers.HeNormal(),
-                 compute_aux=True):
+    def __init__(self, n_block, n_class, input_size,
+                 initialW, comm, compute_aux):
         super(PSPNet, self).__init__()
         mid_stride = True
         pyramids = [6, 3, 2, 1]
         mean = np.array([123.68, 116.779, 103.939])
 
-        if pretrained_model in self._models:
-            if 'n_class' in self._models[pretrained_model]:
-                n_class = self._models[pretrained_model]['n_class']
-            if 'input_size' in self._models[pretrained_model]:
-                input_size = self._models[pretrained_model]['input_size']
-            if 'n_blocks' in self._models[pretrained_model]:
-                n_blocks = self._models[pretrained_model]['n_blocks']
-            self._use_pretrained_model = True
-
-
         if not isinstance(input_size, (list, tuple)):
             input_size = (int(input_size), int(input_size))
 
+        # scales = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
+        self.scales = [1]
+        self.mean = mean.astype(np.float32)
+        self.compute_aux = compute_aux
+        self.input_size = input_size
         with self.init_scope():
-            self.input_size = input_size
-            self.trunk = DilatedFCN(n_blocks=n_blocks, initialW=initialW,
+            self.trunk = DilatedFCN(n_block=n_block, initialW=initialW,
                                     mid_downsample=mid_stride, comm=comm)
 
             # To calculate auxirally loss
@@ -253,23 +217,6 @@ class PSPNet(chainer.Chain):
                                             initialW=initialW)
             self.main_conv2 = L.Convolution2D(
                 512, n_class, 1, 1, 0, False, initialW)
-
-        # scales = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
-        self.scales = [1]
-        self.mean = mean.astype(np.float32)
-        self.compute_aux = compute_aux
-
-        if pretrained_model in self._models:
-            path = download_model(self._models[pretrained_model]['url'])
-            chainer.serializers.load_npz(path, self)
-            self._use_pretrained_model = True
-            print('Pre-trained model has been loaded:', pretrained_model)
-        elif pretrained_model:
-            self._use_pretrained_model = False
-            chainer.serializers.load_npz(pretrained_model, self)
-            print('Pre-trained model has been loaded:', pretrained_model)
-        else:
-            self._use_pretrained_model = False
 
     @property
     def n_class(self):
@@ -431,6 +378,49 @@ class PSPNet(chainer.Chain):
         return labels
 
 
+class PSPNetResNet101(PSPNet):
+
+    _models = {
+        'cityscapes': {
+            'n_class': 19,
+            'input_size': (713, 713),
+            'feat_size': 90,
+            'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
+                   '/ChainerCV_PSPNet/pspnet101_cityscapes_713_reference.npz'
+        },
+    }
+
+    def __init__(self, n_class=None, pretrained_model=None,
+                 input_size=(713, 713), mean=None,
+                 initialW=chainer.initializers.HeNormal(),
+                 comm=None, compute_aux=True):
+        if n_class is None:
+            if pretrained_model not in self._models:
+                raise ValueError(
+                    'The n_class needs to be supplied as an argument')
+            n_class = self._models[pretrained_model]['n_class']
+        if input_size is None:
+            if pretrained_model in self._models:
+                if pretrained_model not in self._models:
+                    raise ValueError(
+                        'The input_size needs to be supplied as an argument')
+                input_size = self._models[pretrained_model]['input_size']
+
+        n_block = [3, 4, 23, 3]
+        super(PSPNetResNet101, self).__init__(
+            n_block, n_class, input_size, initialW, comm, compute_aux)
+
+        if pretrained_model in self._models:
+            path = download_model(self._models[pretrained_model]['url'])
+            chainer.serializers.load_npz(path, self)
+            self._use_pretrained_model = True
+        elif pretrained_model:
+            self._use_pretrained_model = False
+            chainer.serializers.load_npz(pretrained_model, self)
+        else:
+            self._use_pretrained_model = False
+
+
 def _multiscale_predict(predict_method, img, scales):
     orig_H, orig_W = img.shape[1:]
     scores = []
@@ -450,3 +440,5 @@ def _multiscale_predict(predict_method, img, scales):
     xp = chainer.cuda.get_array_module(scores[0])
     scores = xp.stack(scores)
     return scores.mean(0)[0]  # (C, H, W)
+
+

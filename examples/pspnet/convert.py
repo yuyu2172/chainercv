@@ -6,7 +6,7 @@ import re
 import chainer
 import chainer.links as L
 from chainer import serializers
-from chainercv.links import PSPNet
+from chainercv.links import PSPNetResNet101
 from google.protobuf import text_format
 import numpy as np
 
@@ -15,8 +15,8 @@ import caffe_pb2
 
 def get_chainer_model(n_class, input_size, n_blocks, pyramids, mid_stride):
     with chainer.using_config('train', True):
-        model = PSPNet(
-            n_class, input_size, n_blocks, mean=np.array([0, 0, 0]))
+        model = PSPNetResNet101(
+            n_class, None, input_size, mean=np.array([0, 0, 0]))
         model(np.random.rand(1, 3, input_size, input_size).astype(np.float32))
     size = 0
     for param in model.params():
@@ -206,24 +206,24 @@ def transfer(model, param, net):
 if __name__ == '__main__':
     proto_dir = 'weights'
 
-    if not os.path.exists(
-            os.path.join(proto_dir, 'pspnet101_VOC2012.caffemodel')):
-        print('Please download pspnet101_VOC2012.caffemodel from here: '
-              'https://drive.google.com/open?id=0BzaU285cX7TCNVhETE5vVUdMYk0 '
-              'and put it into weights/ dir.')
-        exit()
+    # if not os.path.exists(
+    #         os.path.join(proto_dir, 'pspnet101_VOC2012.caffemodel')):
+    #     print('Please download pspnet101_VOC2012.caffemodel from here: '
+    #           'https://drive.google.com/open?id=0BzaU285cX7TCNVhETE5vVUdMYk0 '
+    #           'and put it into weights/ dir.')
+    #     exit()
     if not os.path.exists(
             os.path.join(proto_dir, 'pspnet101_cityscapes.caffemodel')):
         print('Please download pspnet101_cityscapes.caffemodel from here: '
               'https://drive.google.com/open?id=0BzaU285cX7TCT1M3TmNfNjlUeEU '
               'and put it into weights/ dir.')
         exit()
-    if not os.path.exists(
-            os.path.join(proto_dir, 'pspnet50_ADE20K.caffemodel')):
-        print('Please download pspnet50_ADE20K.caffemodel from here: '
-              'https://drive.google.com/open?id=0BzaU285cX7TCN1R3QnUwQ0hoMTA '
-              'and put it into weights/ dir.')
-        exit()
+    # if not os.path.exists(
+    #         os.path.join(proto_dir, 'pspnet50_ADE20K.caffemodel')):
+    #     print('Please download pspnet50_ADE20K.caffemodel from here: '
+    #           'https://drive.google.com/open?id=0BzaU285cX7TCN1R3QnUwQ0hoMTA '
+    #           'and put it into weights/ dir.')
+    #     exit()
 
     # Num of parameters of models for...
     # VOC2012: 65708501 (train: 70524906)
