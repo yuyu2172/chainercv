@@ -8,6 +8,8 @@ import warnings
 import chainer
 import chainer.functions as F
 import chainer.links as L
+
+from chainercv import transforms
 from chainercv.utils import download_model
 from chainercv.links.model.pspnet.transforms import convolution_crop
 
@@ -324,6 +326,8 @@ class PSPNet(chainer.Chain):
             self.out_main = L.Convolution2D(
                 512, n_class, 1, 1, 0, False, initialW)
 
+        # scales = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
+        self.scales = [1]
         self.mean = mean.astype(np.float32)
         self.compute_aux = compute_aux
 
@@ -522,8 +526,26 @@ class PSPNet(chainer.Chain):
         labels = []
         for img in imgs:
             with chainer.using_config('train', False):
-                # x = self.prepare(img)
-                score = self._tile_predict(img)
-            score = chainer.cuda.to_cpu(score)
-            labels.append(np.argmax(score, axis=0).astype(np.int32))
+                scores = _multiscale_predict(self._tile_predict, img, scales)
+            labels.append(chainer.cuda.to_cpu(self.xp.argmax(scores, axis=0)))
         return labels
+
+
+def _multiscale_predict(predict_method, img, scales):
+    orig_H, orig_W = img.shape[1:]
+    scores = []
+    orig_img = img
+    for scale in scales:
+        img = orig_img.copy()
+        if scale != 1.0:
+            img = transforms.resize(
+                img, (int(orig_H * scale), int(orig_W * scale)))
+        # This method should return scores
+        y = predict_method([img])
+        assert y.shape[1:] == img.shape[1:]
+
+        if scale != 1.0:
+            y = F.resize_images(y, (H, W)).data
+        scores.append(y)
+    xp = chainer.cuda.get_array_module(scores[0])
+    return xp.array(scores).mean(0)  # (1, C, H, W)
