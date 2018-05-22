@@ -183,7 +183,7 @@ class PSPNet(chainer.Chain):
 
     @property
     def n_class(self):
-        return self.main_conv2.out_channels
+        return self.head_conv2.out_channels
 
     def __call__(self, x):
         _, h = self.extractor(x)
