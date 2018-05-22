@@ -35,16 +35,11 @@ def main():
 
     dataset = CityscapesSemanticSegmentationDataset(
         split='val', label_resolution='fine')
-    iterator = iterators.SerialIterator(
+    it = iterators.SerialIterator(
         dataset, 1, repeat=False, shuffle=False)
 
     in_values, out_values, rest_values = apply_to_iterator(
-        model.predict, iterator, hook=ProgressHook(len(dataset)))
-    # delete unused iterators explicitly
-    del in_values
-
-    in_values, out_values, rest_values = apply_to_iterator(
-        model.predict, it, hook=ProgressHook(len(test)))
+        model.predict, it, hook=ProgressHook(len(dataset)))
     # Delete an iterator of images to save memory usage.
     del in_values
     pred_labels, = out_values
