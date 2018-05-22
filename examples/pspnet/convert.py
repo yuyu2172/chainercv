@@ -16,7 +16,7 @@ import caffe_pb2
 def get_chainer_model(n_class, input_size, n_blocks, pyramids, mid_stride):
     with chainer.using_config('train', True):
         model = PSPNetResNet101(
-            n_class, None, input_size, mean=np.array([0, 0, 0]))
+            n_class, None, input_size)
         model(np.random.rand(1, 3, input_size, input_size).astype(np.float32))
     size = 0
     for param in model.params():
@@ -180,24 +180,24 @@ def transfer(model, param, net):
             continue
         config = name_config[layer.name]
         if layer.name.startswith('conv1'):
-            model.trunk = copy_head(layer, config, model.trunk)
+            model.extractor = copy_head(layer, config, model.extractor)
         elif layer.name.startswith('conv2'):
-            model.trunk.res2 = copy_resblock(layer, config, model.trunk.res2)
+            model.extractor.res2 = copy_resblock(layer, config, model.extractor.res2)
         elif layer.name.startswith('conv3'):
-            model.trunk.res3 = copy_resblock(layer, config, model.trunk.res3)
+            model.extractor.res3 = copy_resblock(layer, config, model.extractor.res3)
         elif layer.name.startswith('conv4'):
-            model.trunk.res4 = copy_resblock(layer, config, model.trunk.res4)
+            model.extractor.res4 = copy_resblock(layer, config, model.extractor.res4)
         elif layer.name.startswith('conv5') \
                 and 'pool' not in layer.name \
                 and 'conv5_4' not in layer.name:
-            model.trunk.res5 = copy_resblock(layer, config, model.trunk.res5)
+            model.extractor.res5 = copy_resblock(layer, config, model.extractor.res5)
         elif layer.name.startswith('conv5_3') and 'pool' in layer.name:
             model.ppm = copy_ppm_module(layer, config, model.ppm)
         elif layer.name.startswith('conv5_4'):
-            model.main_conv1 = copy_cbr(layer, config, model.main_conv1)
+            model.head_conv1 = copy_cbr(layer, config, model.head_conv1)
         elif layer.name.startswith('conv6'):
-            model.main_conv2 = copy_conv(
-                layer, config, model.main_conv2, has_bias=True)
+            model.head_conv2 = copy_conv(
+                layer, config, model.head_conv2, has_bias=True)
         # NOTE: Auxirillary is not copied
         else:
             print('Ignored: {} ({})'.format(layer.name, layer.type))
