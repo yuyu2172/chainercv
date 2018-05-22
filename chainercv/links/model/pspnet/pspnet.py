@@ -2,19 +2,16 @@ from __future__ import division
 
 from math import ceil
 import numpy as np
-import six
-import warnings
 
 import chainer
 import chainer.functions as F
 import chainer.links as L
 
 from chainercv.links import Conv2DBNActiv
-from chainercv.links.model.resnet import ResBlock
 from chainercv.links.model.pspnet.transforms import convolution_crop
+from chainercv.links.model.resnet import ResBlock
 from chainercv import transforms
 from chainercv import utils
-
 
 
 class PyramidPoolingModule(chainer.ChainList):
@@ -54,8 +51,12 @@ class PyramidPoolingModule(chainer.ChainList):
 
 class DilatedFCN(chainer.Chain):
 
-    def __init__(self, n_block, initialW, mid_downsample, bn_kwargs=None):
-        stride_first = not mid_downsample
+    _blocks = {
+        101: [3, 4, 23, 3],
+    }
+
+    def __init__(self, n_layer, initialW, bn_kwargs=None):
+        n_block = self._blocks[n_layer]
         super(DilatedFCN, self).__init__()
         with self.init_scope():
             self.conv1_1 = Conv2DBNActiv(
@@ -67,16 +68,16 @@ class DilatedFCN(chainer.Chain):
                 64, 128, 3, 1, 1, 1, initialW=initialW, bn_kwargs=bn_kwargs)
             self.res2 = ResBlock(
                 n_block[0], 128, 64, 256, 1, 1,
-                initialW, bn_kwargs, stride_first)
+                initialW, bn_kwargs, stride_first=False)
             self.res3 = ResBlock(
                 n_block[1], 256, 128, 512, 2, 1,
-                initialW, bn_kwargs, stride_first)
+                initialW, bn_kwargs, stride_first=False)
             self.res4 = ResBlock(
                 n_block[2], 512, 256, 1024, 1, 2,
-                initialW, bn_kwargs, stride_first)
+                initialW, bn_kwargs, stride_first=False)
             self.res5 = ResBlock(
                 n_block[3], 1024, 512, 2048, 1, 4,
-                initialW, bn_kwargs, stride_first)
+                initialW, bn_kwargs, stride_first=False)
 
     def __call__(self, x):
         h = self.conv1_3(self.conv1_2(self.conv1_1(x)))
@@ -109,6 +110,7 @@ class PSPNet(chainer.Chain):
         Somehow
 
     Args:
+        n_layer (int): The number of layers.
         n_class (int): The number of channels in the last convolution layer.
         pretrained_model (str): The destination of the pre-trained
             chainer model serialized as a :obj:`.npz` file.
@@ -122,21 +124,6 @@ class PSPNet(chainer.Chain):
             single integer is given, it's treated in the same way as if
             a tuple of (input_size, input_size) is given. If an iterable object
             is given, it should mean (height, width) of the input images.
-        n_blocks (list of int): Numbers of layers in ResNet. Typically,
-            [3, 4, 23, 3] for ResNet101 (used for PASCAL VOC2012 and
-            Cityscapes in the original paper) and [3, 4, 6, 3] for ResNet50
-            (used for ADE20K datset in the original paper).
-        pyramids (list of int): The number of division to the feature map in
-            each pyramid level. The length of this list will be the number of
-            levels of pyramid in the pyramid pooling module. In each pyramid,
-            an average pooling is applied to the feature map with the kernel
-            size of the corresponding value in this list.
-        mid_stride (bool): If True, spatial dimention reduction in bottleneck
-            modules in ResNet part will be done at the middle 3x3 convolution.
-            It means that the stride of the middle 3x3 convolution will be two.
-            Otherwise (if it's set to False), the stride of the first 1x1
-            convolution in the bottleneck module will be two as in the original
-            ResNet and Deeplab v2.
         comm (chainermn.communicator or None): If a ChainerMN communicator is
             given, it will be used for distributed batch normalization during
             training. If None, all batch normalization links will not share
@@ -146,8 +133,8 @@ class PSPNet(chainer.Chain):
 
     """
 
-    def __init__(self, n_block, n_class, input_size,
-                 initialW=None, comm=None, compute_aux=False):
+    def __init__(self, n_layer, n_class, input_size,
+                 initialW=None, comm=None):
         super(PSPNet, self).__init__()
         if comm is not None:
             bn_kwargs = {'comm': comm}
@@ -156,23 +143,20 @@ class PSPNet(chainer.Chain):
         if initialW is None:
             initialW = chainer.initializers.HeNormal()
 
-        mid_stride = True
         pyramids = [6, 3, 2, 1]
 
         if not isinstance(input_size, (list, tuple)):
             input_size = (int(input_size), int(input_size))
 
-        # scales = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
-        self.scales = [1]
-        self.mean = np.array([123.68, 116.779, 103.939], dtype=np.float32)
-        self.compute_aux = compute_aux
+        self.scales = None
+        self.mean = np.array(
+            [123.68, 116.779, 103.939], dtype=np.float32)[:, None, None]
         self.input_size = input_size
+
+        feat_size = (input_size[0] // 8, input_size[1] // 8)
         with self.init_scope():
-            self.extractor = DilatedFCN(n_block=n_block, initialW=initialW,
-                                        mid_downsample=mid_stride,
+            self.extractor = DilatedFCN(n_layer=n_layer, initialW=initialW,
                                         bn_kwargs=bn_kwargs)
-            # Main branch
-            feat_size = (input_size[0] // 8, input_size[1] // 8)
             self.ppm = PyramidPoolingModule(2048, feat_size, pyramids,
                                             initialW=initialW,
                                             bn_kwargs=bn_kwargs)
@@ -196,21 +180,21 @@ class PSPNet(chainer.Chain):
 
     def _tile_predict(self, img):
         if self.mean is not None:
-            img = img - self.mean[:, None, None]
+            img = img - self.mean
         ori_H, ori_W = img.shape[1:]
         long_size = max(ori_H, ori_W)
 
-        # When padding input patches is needed
         if long_size > max(self.input_size):
-            stride_rate = 2 / 3.
+            stride_rate = 2 / 3
             stride = (int(ceil(self.input_size[0] * stride_rate)),
                       int(ceil(self.input_size[1] * stride_rate)))
 
             imgs, param = convolution_crop(
                 img, self.input_size, stride, return_param=True)
 
-            count = self.xp.zeros((1, ori_H, ori_W), dtype=np.float32)
-            pred = self.xp.zeros((1, self.n_class, ori_H, ori_W), dtype=np.float32)
+            counts = self.xp.zeros((1, ori_H, ori_W), dtype=np.float32)
+            preds = self.xp.zeros((1, self.n_class, ori_H, ori_W),
+                                  dtype=np.float32)
             N = len(param['y_slices'])
             for i in range(N):
                 img_i = imgs[i:i+1]
@@ -221,26 +205,30 @@ class PSPNet(chainer.Chain):
 
                 scores_i = self._predict(img_i)
                 # Flip horizontally flipped score maps again
-                flipped_scores_i = self._predict(img_i[:, :, :, ::-1])[:, :, :, ::-1]
+                flipped_scores_i = self._predict(
+                    img_i[:, :, :, ::-1])[:, :, :, ::-1]
 
-                pred[0, :, y_slice, x_slice] += scores_i[0, :, crop_y_slice, crop_x_slice]
-                pred[0, :, y_slice, x_slice] +=\
+                preds[0, :, y_slice, x_slice] +=\
+                    scores_i[0, :, crop_y_slice, crop_x_slice]
+                preds[0, :, y_slice, x_slice] +=\
                     flipped_scores_i[0, :, crop_y_slice, crop_x_slice]
-                count[0, y_slice, x_slice] += 2
+                counts[0, y_slice, x_slice] += 2
 
-            score = pred / count[:, None]
+            scores = preds / counts[:, None]
         else:
-            img, param = transforms.resize_contain(img, self.input_size, return_param=True)
-            # img, pad_h, pad_w = self._pad_img(img)
-            pred1 = self._predict(img[np.newaxis])
-            pred2 = self._predict(img[np.newaxis, :, :, ::-1])
-            pred = (pred1 + pred2[:, :, :, ::-1]) / 2.
+            img, param = transforms.resize_contain(
+                img, self.input_size, return_param=True)
+            preds1 = self._predict(img[np.newaxis])
+            preds2 = self._predict(img[np.newaxis, :, :, ::-1])
+            preds = (preds1 + preds2[:, :, :, ::-1]) / 2
 
-            print(param)
-            score = pred[
-                :, :, :self.input_size[0] - pad_h, :self.input_size[1] - pad_w]
-        score = F.resize_images(score, (ori_H, ori_W))[0].array
-        return score
+            y_start = param['y_offset']
+            y_end = y_start + param['scaled_size'][0]
+            x_start = param['x_offset']
+            x_end = x_start + param['scaled_size'][1]
+            scores = preds[:, :, y_start:y_end, x_start:x_end]
+        scores = F.resize_images(scores, (ori_H, ori_W))[0].array
+        return scores
 
     def _predict(self, imgs):
         xs = chainer.Variable(self.xp.asarray(imgs))
@@ -268,7 +256,8 @@ class PSPNet(chainer.Chain):
             with chainer.using_config('train', False), \
                     chainer.function.no_backprop_mode():
                 if self.scales is not None:
-                    scores = _multiscale_predict(self._tile_predict, img, self.scales)
+                    scores = _multiscale_predict(
+                        self._tile_predict, img, self.scales)
                 else:
                     scores = self._tile_predict(img)
             labels.append(chainer.cuda.to_cpu(
@@ -288,15 +277,15 @@ class PSPNetResNet101(PSPNet):
 
     def __init__(self, n_class=None, pretrained_model=None,
                  input_size=None,
-                 initialW=None, comm=None, compute_aux=True):
+                 initialW=None, comm=None):
         param, path = utils.prepare_pretrained_model(
             {'n_class': n_class, 'input_size': input_size},
             pretrained_model, self._models,
             {'input_size': (713, 713)})
 
-        n_block = [3, 4, 23, 3]
         super(PSPNetResNet101, self).__init__(
-            n_block, param['n_class'], param['input_size'], initialW, comm, compute_aux)
+            101, param['n_class'], param['input_size'],
+            initialW, comm)
 
         if path:
             chainer.serializers.load_npz(path, self)
