@@ -9,11 +9,12 @@ import chainer
 import chainer.functions as F
 import chainer.links as L
 
-from chainercv import transforms
-from chainercv import utils
 from chainercv.links import Conv2DBNActiv
 from chainercv.links.model.resnet import ResBlock
 from chainercv.links.model.pspnet.transforms import convolution_crop
+from chainercv import transforms
+from chainercv import utils
+
 
 
 class PyramidPoolingModule(chainer.ChainList):
@@ -218,48 +219,48 @@ class PSPNet(chainer.Chain):
                 crop_y_slice = param['crop_y_slices'][i]
                 crop_x_slice = param['crop_x_slices'][i]
 
-                var = chainer.Variable(self.xp.asarray(img_i))
-                with chainer.using_config('train', False):
-                    scores_i = F.softmax(self.__call__(var)).array
-                assert scores_i.shape[2:] == var.shape[2:]
-                pred[0, :, y_slice, x_slice] += scores_i[0, :, crop_y_slice, crop_x_slice]
-
-                # Horizontal flip
-                flipped_var = chainer.Variable(self.xp.asarray(img_i[:, :, :, ::-1]))
-                with chainer.using_config('train', False):
-                    flipped_scores_i = F.softmax(self.__call__(flipped_var)).array
+                scores_i = self._predict(img_i)
                 # Flip horizontally flipped score maps again
-                flipped_scores_i = flipped_scores_i[:, :, :, ::-1]
+                flipped_scores_i = self._predict(img_i[:, :, :, ::-1])[:, :, :, ::-1]
+
+                pred[0, :, y_slice, x_slice] += scores_i[0, :, crop_y_slice, crop_x_slice]
                 pred[0, :, y_slice, x_slice] +=\
                     flipped_scores_i[0, :, crop_y_slice, crop_x_slice]
                 count[0, y_slice, x_slice] += 2
 
             score = pred / count[:, None]
         else:
-            raise ValueError("Not supported\n")
+            img, param = transforms.resize_contain(img, self.input_size, return_param=True)
             # img, pad_h, pad_w = self._pad_img(img)
-            # pred1 = self._predict(img[np.newaxis])
-            # pred2 = self._predict(img[np.newaxis, :, :, ::-1])
-            # pred = (pred1 + pred2[:, :, :, ::-1]) / 2.
-            # score = pred[
-            #     :, :, :self.input_size[0] - pad_h, :self.input_size[1] - pad_w]
+            pred1 = self._predict(img[np.newaxis])
+            pred2 = self._predict(img[np.newaxis, :, :, ::-1])
+            pred = (pred1 + pred2[:, :, :, ::-1]) / 2.
+
+            print(param)
+            score = pred[
+                :, :, :self.input_size[0] - pad_h, :self.input_size[1] - pad_w]
         score = F.resize_images(score, (ori_H, ori_W))[0].array
         return score
+
+    def _predict(self, imgs):
+        xs = chainer.Variable(self.xp.asarray(imgs))
+        with chainer.using_config('train', False):
+            scores = F.softmax(self.__call__(xs)).array
+        return scores
 
     def predict(self, imgs):
         """Conduct semantic segmentation from images.
 
         Args:
             imgs (iterable of numpy.ndarray): Arrays holding images.
-                All images should be in CHW order.
+                All images are in CHW and RGB format
+                and the range of their values are :math:`[0, 255]`.
 
         Returns:
-            list of numpy.ndarray: List of predictions from each image in the
-                input list. Note that if you specified ``argmax=True``, each
-                prediction is resulting integer label and the number of
-                dimensions is two (:math:`(H, W)`). Otherwise, the output will
-                be a probability map calculated by the model and its number of
-                dimensions will be three (:math:`(C, H, W)`).
+            list of numpy.ndarray:
+
+            List of integer labels predicted from each image in the input \
+            list.
 
         """
         labels = []

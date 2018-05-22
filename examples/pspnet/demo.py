@@ -50,6 +50,9 @@ if __name__ == '__main__':
         model.to_gpu(args.gpu)
 
     img = read_image(args.image)
+    from chainercv.transforms import resize
+    print(img.shape )
+    img = resize(img, (256, 512))
     labels = model.predict([img])
     label = labels[0]
 
