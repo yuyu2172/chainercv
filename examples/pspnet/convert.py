@@ -121,6 +121,7 @@ def copy_conv2d_bn_activ(layer, config, cba, inverse_ch=False):
 
 def copy_head(layer, config, block):
     if layer.name.startswith('conv1_1'):
+        # You do not need this for VOC2012
         block.conv1_1 = copy_cbr(layer, config, block.conv1_1, inverse_ch=True)
     elif layer.name.startswith('conv1_2'):
         block.conv1_2 = copy_cbr(layer, config, block.conv1_2)
@@ -212,12 +213,12 @@ if __name__ == '__main__':
     #           'https://drive.google.com/open?id=0BzaU285cX7TCNVhETE5vVUdMYk0 '
     #           'and put it into weights/ dir.')
     #     exit()
-    if not os.path.exists(
-            os.path.join(proto_dir, 'pspnet101_cityscapes.caffemodel')):
-        print('Please download pspnet101_cityscapes.caffemodel from here: '
-              'https://drive.google.com/open?id=0BzaU285cX7TCT1M3TmNfNjlUeEU '
-              'and put it into weights/ dir.')
-        exit()
+    # if not os.path.exists(
+    #         os.path.join(proto_dir, 'pspnet101_cityscapes.caffemodel')):
+    #     print('Please download pspnet101_cityscapes.caffemodel from here: '
+    #           'https://drive.google.com/open?id=0BzaU285cX7TCT1M3TmNfNjlUeEU '
+    #           'and put it into weights/ dir.')
+    #     exit()
     # if not os.path.exists(
     #         os.path.join(proto_dir, 'pspnet50_ADE20K.caffemodel')):
     #     print('Please download pspnet50_ADE20K.caffemodel from here: '

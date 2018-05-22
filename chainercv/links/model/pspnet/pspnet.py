@@ -10,65 +10,40 @@ import chainer.functions as F
 import chainer.links as L
 
 from chainercv import transforms
-from chainercv.utils import download_model
+from chainercv import utils
 from chainercv.links import Conv2DBNActiv
 from chainercv.links.model.resnet import ResBlock
 from chainercv.links.model.pspnet.transforms import convolution_crop
 
 
-class ConvBNReLU(chainer.Chain):
-
-    def __init__(
-            self, in_channels, out_channels, ksize, stride=1, pad=1,
-            dilate=1, initialW=chainer.initializers.HeNormal(), comm=None):
-
-        from chainermn.links import MultiNodeBatchNormalization
-        super(ConvBNReLU, self).__init__()
-        with self.init_scope():
-            if dilate > 1:
-                self.conv = L.DilatedConvolution2D(
-                    in_channels, out_channels, ksize, stride, pad, dilate,
-                    True, initialW)
-            else:
-                self.conv = L.Convolution2D(
-                    in_channels, out_channels, ksize, stride, pad, True,
-                    initialW)
-            if comm is not None:
-                self.bn = MultiNodeBatchNormalization(
-                    out_channels, comm, eps=1e-5, decay=0.95)
-            else:
-                self.bn = L.BatchNormalization(out_channels, eps=1e-5, decay=0.95)
-
-    def __call__(self, x, relu=True):
-        h = self.bn(self.conv(x))
-        return h if not relu else F.relu(h)
+# RGB order
+_imagenet_mean = np.array(
+    [123.68, 116.779, 103.939], dtype=np.float32)[:, np.newaxis, np.newaxis]
 
 
 class PyramidPoolingModule(chainer.ChainList):
 
     def __init__(self, in_channels, feat_size, pyramids,
-                 initialW=chainer.initializers.HeNormal(), comm=None):
+                 initialW=None,
+                 bn_kwargs=None):
         out_channels = in_channels // len(pyramids)
         super(PyramidPoolingModule, self).__init__(
             Conv2DBNActiv(
                 in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs={'comm': comm}),
+                bn_kwargs=bn_kwargs),
             Conv2DBNActiv(
                 in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs={'comm': comm}),
+                bn_kwargs=bn_kwargs),
             Conv2DBNActiv(
                 in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs={'comm': comm}),
+                bn_kwargs=bn_kwargs),
             Conv2DBNActiv(
                 in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs={'comm': comm})
+                bn_kwargs=bn_kwargs)
         )
-        if isinstance(feat_size, int):
-            self.ksizes = (feat_size // np.array(pyramids)).tolist()
-        elif isinstance(feat_size, (list, tuple)) and len(feat_size) == 2:
-            kh = (feat_size[0] // np.array(pyramids)).tolist()
-            kw = (feat_size[1] // np.array(pyramids)).tolist()
-            self.ksizes = list(zip(kh, kw))
+        kh = (feat_size[0] // np.array(pyramids))
+        kw = (feat_size[1] // np.array(pyramids))
+        self.ksizes = list(zip(kh, kw))
 
     def __call__(self, x):
         ys = [x]
@@ -83,8 +58,7 @@ class PyramidPoolingModule(chainer.ChainList):
 
 class DilatedFCN(chainer.Chain):
 
-    def __init__(self, n_block, initialW, mid_downsample, comm):
-        bn_kwargs = {'comm': comm}
+    def __init__(self, n_block, initialW, mid_downsample, bn_kwargs=None):
         stride_first = not mid_downsample
         super(DilatedFCN, self).__init__()
         with self.init_scope():
@@ -92,11 +66,9 @@ class DilatedFCN(chainer.Chain):
                 None, 64, 3, 2, 1, 1,
                 initialW=initialW, bn_kwargs=bn_kwargs)
             self.conv1_2 = Conv2DBNActiv(
-                64, 64, 3, 1, 1, 1,
-                initialW=initialW, bn_kwargs=bn_kwargs)
+                64, 64, 3, 1, 1, 1, initialW=initialW, bn_kwargs=bn_kwargs)
             self.conv1_3 = Conv2DBNActiv(
-                64, 128, 3, 1, 1, 1,
-                initialW=initialW, bn_kwargs=bn_kwargs)
+                64, 128, 3, 1, 1, 1, initialW=initialW, bn_kwargs=bn_kwargs)
             self.res2 = ResBlock(
                 n_block[0], 128, 64, 256, 1, 1,
                 initialW, bn_kwargs, stride_first)
@@ -111,10 +83,10 @@ class DilatedFCN(chainer.Chain):
                 initialW, bn_kwargs, stride_first)
 
     def __call__(self, x):
-        h = self.conv1_3(self.conv1_2(self.conv1_1(x)))  # 1/2
-        h = F.max_pooling_2d(h, 3, 2, 1)  # 1/4
+        h = self.conv1_3(self.conv1_2(self.conv1_1(x)))
+        h = F.max_pooling_2d(h, 3, 2, 1)
         h = self.res2(h)
-        h = self.res3(h)  # 1/8
+        h = self.res3(h)
         h1 = self.res4(h)
         h2 = self.res5(h1)
         return h1, h2
@@ -184,8 +156,15 @@ class PSPNet(chainer.Chain):
     """
 
     def __init__(self, n_block, n_class, input_size,
-                 initialW, comm, compute_aux):
+                 initialW=None, comm=None, compute_aux=False):
         super(PSPNet, self).__init__()
+        if comm is not None:
+            bn_kwargs = {'comm': comm}
+        else:
+            bn_kwargs = {}
+        if initialW is None:
+            initialW = chainer.initializers.HeNormal()
+
         mid_stride = True
         pyramids = [6, 3, 2, 1]
         mean = np.array([123.68, 116.779, 103.939])
@@ -200,7 +179,7 @@ class PSPNet(chainer.Chain):
         self.input_size = input_size
         with self.init_scope():
             self.trunk = DilatedFCN(n_block=n_block, initialW=initialW,
-                                    mid_downsample=mid_stride, comm=comm)
+                                    mid_downsample=mid_stride, bn_kwargs=bn_kwargs)
 
             # To calculate auxirally loss
             # Perhaps, this should not be placed here
@@ -209,10 +188,9 @@ class PSPNet(chainer.Chain):
                 512, n_class, 3, 1, 1, False, initialW)
 
             # Main branch
-            # 713 // 8 != 90 ... Is it OK? --> Fix it
             feat_size = (input_size[0] // 8, input_size[1] // 8)
             self.ppm = PyramidPoolingModule(2048, feat_size, pyramids,
-                                            initialW=initialW, comm=comm)
+                                            initialW=initialW, bn_kwargs=bn_kwargs)
             self.main_conv1 = Conv2DBNActiv(4096, 512, 3, 1, 1,
                                             initialW=initialW)
             self.main_conv2 = L.Convolution2D(
@@ -220,7 +198,7 @@ class PSPNet(chainer.Chain):
 
     @property
     def n_class(self):
-        return self.out_main.out_channels
+        return self.main_conv2.out_channels
 
     def __call__(self, x):
         """Forward computation of PSPNet
@@ -260,9 +238,11 @@ class PSPNet(chainer.Chain):
         # Prepare should be made
         if self.mean is not None:
             img = img - self.mean[:, None, None]
-            if self._use_pretrained_model:
+            # if self._use_pretrained_model:
+            if True:
+                pass
                 # pretrained model is trained using BGR images
-                img = img[::-1]
+                # img = img[::-1]
         ori_rows, ori_cols = img.shape[1:]
         long_size = max(ori_rows, ori_cols)
 
@@ -273,9 +253,6 @@ class PSPNet(chainer.Chain):
                       int(ceil(self.input_size[1] * stride_rate)))
 
             imgs, param = convolution_crop(img, self.input_size, stride, return_param=True)
-            # Horizontal flip
-            # imgs = np.concatenate((imgs, imgs[:, :, :, ::-1]), axis=0)
-            # scores = self._predict(imgs)
 
             count = self.xp.zeros((1, ori_rows, ori_cols), dtype=np.float32)
             pred = self.xp.zeros((1, self.n_class, ori_rows, ori_cols), dtype=np.float32)
@@ -388,37 +365,29 @@ class PSPNetResNet101(PSPNet):
             'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
                    '/ChainerCV_PSPNet/pspnet101_cityscapes_713_reference.npz'
         },
+        # 'voc2012': {
+        #     'n_class': 21,
+        #     'input_size': (473, 473),
+        #     'feat_size': 60,
+        #     'url': 'https://github.com/mitmul/chainer-pspnet/releases/download'
+        #     '/ChainerCV_PSPNet/pspnet101_VOC2012_473_reference.npz'
+        # }
     }
 
     def __init__(self, n_class=None, pretrained_model=None,
-                 input_size=(713, 713), mean=None,
-                 initialW=chainer.initializers.HeNormal(),
-                 comm=None, compute_aux=True):
-        if n_class is None:
-            if pretrained_model not in self._models:
-                raise ValueError(
-                    'The n_class needs to be supplied as an argument')
-            n_class = self._models[pretrained_model]['n_class']
-        if input_size is None:
-            if pretrained_model in self._models:
-                if pretrained_model not in self._models:
-                    raise ValueError(
-                        'The input_size needs to be supplied as an argument')
-                input_size = self._models[pretrained_model]['input_size']
+                 input_size=None, mean=None,
+                 initialW=None, comm=None, compute_aux=True):
+        param, path = utils.prepare_pretrained_model(
+            {'n_class': n_class, 'input_size': input_size},
+            pretrained_model, self._models,
+            {'input_size': (713, 713)})
 
         n_block = [3, 4, 23, 3]
         super(PSPNetResNet101, self).__init__(
-            n_block, n_class, input_size, initialW, comm, compute_aux)
+            n_block, param['n_class'], param['input_size'], initialW, comm, compute_aux)
 
-        if pretrained_model in self._models:
-            path = download_model(self._models[pretrained_model]['url'])
+        if path:
             chainer.serializers.load_npz(path, self)
-            self._use_pretrained_model = True
-        elif pretrained_model:
-            self._use_pretrained_model = False
-            chainer.serializers.load_npz(pretrained_model, self)
-        else:
-            self._use_pretrained_model = False
 
 
 def _multiscale_predict(predict_method, img, scales):
@@ -440,5 +409,3 @@ def _multiscale_predict(predict_method, img, scales):
     xp = chainer.cuda.get_array_module(scores[0])
     scores = xp.stack(scores)
     return scores.mean(0)[0]  # (C, H, W)
-
-

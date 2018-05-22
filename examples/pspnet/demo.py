@@ -1,6 +1,6 @@
 import argparse
 
-import matplotlib.pyplot as plot
+import matplotlib.pyplot as plt
 import numpy as np
 
 import chainer
@@ -10,7 +10,7 @@ from chainercv.datasets import cityscapes_semantic_segmentation_label_colors
 from chainercv.datasets import cityscapes_semantic_segmentation_label_names
 from chainercv.datasets import voc_semantic_segmentation_label_colors
 from chainercv.datasets import voc_semantic_segmentation_label_names
-from chainercv.links import PSPNet
+from chainercv.links import PSPNetResNet101
 from chainercv.utils import read_image
 from chainercv.visualizations import vis_image
 from chainercv.visualizations import vis_semantic_segmentation
@@ -19,29 +19,31 @@ from chainercv.visualizations import vis_semantic_segmentation
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', '-g', type=int, default=-1)
-    parser.add_argument('--pretrained_model', choices=['voc2012', 'cityscapes', 'ade20k'])
-    # parser.add_argument('--image', '-f', type=str)
+    parser.add_argument('--pretrained_model')
     parser.add_argument('image')
-    parser.add_argument('--scales', '-s', type=float, nargs='*', default=None)
+    parser.add_argument('--dataset', type=str, default=None)
+    parser.add_argument('--input_size', type=int, default=473)
     args = parser.parse_args()
 
-    chainer.config.train = False
-
-    input_size = (713, 713)
-    n_blocks = [3, 4, 23, 3]
-    model = PSPNet(pretrained_model=args.pretrained_model, input_size, n_blocks)
-    if args.pretrained_model == 'voc2012':
+    if args.dataset == 'voc2012':
         label_names = voc_semantic_segmentation_label_names
         colors = voc_semantic_segmentation_label_colors
-    elif args.pretrained_model == 'cityscapes':
+    elif args.dataset == 'cityscapes':
         label_names = cityscapes_semantic_segmentation_label_names
         colors = cityscapes_semantic_segmentation_label_colors
-    elif args.pretrained_model == 'ade20k':
+    elif args.dataset == 'ade20k':
         label_names = ade20k_semantic_segmentation_label_names
         colors = ade20k_semantic_segmentation_label_colors
+
+    if args.dataset is not None:
+        n_class = len(label_names)
     else:
         label_names = None
         colors = None
+        n_class = None
+
+    input_size = (args.input_size, args.input_size)
+    model = PSPNetResNet101(n_class, args.pretrained_model, input_size)
 
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu).use()
@@ -51,13 +53,12 @@ if __name__ == '__main__':
     labels = model.predict([img])
     label = labels[0]
 
-    print(type(label))
-    np.save('label.npy', label)
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1, 2, 1)
+    vis_image(img, ax=ax1)
+    ax2 = fig.add_subplot(1, 2, 2)
+    ax2, legend_handles = vis_semantic_segmentation(
+        img, label, label_names, colors, ax=ax2)
+    ax2.legend(handles=legend_handles, bbox_to_anchor=(1, 1), loc=2)
 
-    # fig = plot.figure()
-    # ax1 = fig.add_subplot(1, 2, 1)
-    # vis_image(img, ax=ax1)
-    # ax2 = fig.add_subplot(1, 2, 2)
-    # vis_semantic_segmentation(
-    #     label, label_names, colors, ax=ax2)
-    # plot.show()
+    plt.show()
