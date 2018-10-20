@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+import cv2
 
 
 def read_image(path, dtype=np.float32, color=True):
@@ -20,6 +21,12 @@ def read_image(path, dtype=np.float32, color=True):
     Returns:
         ~numpy.ndarray: An image.
     """
+
+    if True:
+        img = cv2.imread(path)
+        img = img[:, :, ::-1]  # BGR->RGB
+        img = img.transpose((2, 0, 1))  # HWC->CHW
+        return img.astype(np.float32)
 
     f = Image.open(path)
     try:
