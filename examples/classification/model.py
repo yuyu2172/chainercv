@@ -18,41 +18,6 @@ from chainercv import utils
 from chainercv.links.model.resnet.resnet import _imagenet_mean
 
 
-class PyramidPoolingModule(chainer.ChainList):
-
-    def __init__(self, in_channels, feat_size, pyramids,
-                 initialW=None,
-                 bn_kwargs=None):
-        out_channels = in_channels // len(pyramids)
-        super(PyramidPoolingModule, self).__init__(
-            Conv2DBNActiv(
-                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs=bn_kwargs),
-            Conv2DBNActiv(
-                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs=bn_kwargs),
-            Conv2DBNActiv(
-                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs=bn_kwargs),
-            Conv2DBNActiv(
-                in_channels, out_channels, 1, 1, 0, 1, initialW=initialW,
-                bn_kwargs=bn_kwargs)
-        )
-        kh = feat_size[0] // np.array(pyramids)
-        kw = feat_size[1] // np.array(pyramids)
-        self.ksizes = list(zip(kh, kw))
-
-    def __call__(self, x):
-        ys = [x]
-        H, W = x.shape[2:]
-        for f, ksize in zip(self, self.ksizes):
-            y = F.average_pooling_2d(x, ksize, ksize)
-            y = f(y)
-            y = F.resize_images(y, (H, W))
-            ys.append(y)
-        return F.concat(ys, axis=1)
-
-
 class PSPNetBackbone(PickableSequentialChain):
 
     _blocks = {
