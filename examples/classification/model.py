@@ -83,16 +83,16 @@ class PSPNetBackbone(PickableSequentialChain):
                 x, ksize=3, stride=2, pad=1)
             self.res2 = ResBlock(
                 n_block[0], 128, 64, 256, 1, 1,
-                initialW, bn_kwargs, stride_first=False)
+                initialW=initialW, bn_kwargs=bn_kwargs, stride_first=False)
             self.res3 = ResBlock(
                 n_block[1], 256, 128, 512, 2, 1,
-                initialW, bn_kwargs, stride_first=False)
+                initialW=initialW, bn_kwargs=bn_kwargs, stride_first=False)
             self.res4 = ResBlock(
                 n_block[2], 512, 256, 1024, 2, 1,
-                initialW, bn_kwargs, stride_first=False)
+                initialW=initialW, bn_kwargs=bn_kwargs, stride_first=False)
             self.res5 = ResBlock(
                 n_block[3], 1024, 512, 2048, 2, 1,
-                initialW, bn_kwargs, stride_first=False)
+                initialW=initialW, bn_kwargs=bn_kwargs, stride_first=False)
             self.pool5 = _global_average_pooling_2d
             self.fc6 = L.Linear(None, n_class, **fc_kwargs)
             self.prob = F.softmax
