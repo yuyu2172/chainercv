@@ -67,8 +67,10 @@ def main():
                       'kwargs': {'arch': 'fb'}},
         'resnet152': {'class': ResNet152, 'score_layer_name': 'fc6',
                       'kwargs': {'arch': 'fb'}},
-        'psp': {'class': PSPNetBackbone, 'score_layer_name': 'fc6',
-                'kwargs': {'n_layer': 101}}
+        'psp101': {'class': PSPNetBackbone, 'score_layer_name': 'fc6',
+                'kwargs': {'n_layer': 101}},
+        'psp50': {'class': PSPNetBackbone, 'score_layer_name': 'fc6',
+                'kwargs': {'n_layer': 50}}
     }
     parser = argparse.ArgumentParser(
         description='Learning convnet from ILSVRC2012 dataset')
