@@ -179,11 +179,11 @@ def main():
 
     dataset_cfgs = {
         'ade20k': {
-            'input_size': (473, 473),
+            'input_size': (480, 480),
             'label_names': ade20k_semantic_segmentation_label_names,
             'iteration': 150000},
         'cityscapes': {
-            'input_size': (713, 713),
+            'input_size': (720, 720),
             'label_names': cityscapes_semantic_segmentation_label_names,
             'iteration': 90000}
     }
@@ -203,10 +203,24 @@ def main():
         model = PSPNetResNet101(
             n_class, pretrained_model='imagenet',
             input_size=dataset_cfg['input_size'])
+        from chainercv.links import ResNet101
+        base = ResNet101(pretrained_model='imagenet')
+        model.extractor.conv1.copyparams(base.conv1)
+        model.extractor.res2.copyparams(base.res2)
+        model.extractor.res3.copyparams(base.res3)
+        model.extractor.res4.copyparams(base.res4)
+        model.extractor.res5.copyparams(base.res5)
     elif args.model == 'pspnet_resnet50':
         model = PSPNetResNet50(
             n_class, pretrained_model='imagenet',
             input_size=dataset_cfg['input_size'])
+        from chainercv.links import ResNet50
+        base = ResNet50(pretrained_model='imagenet')
+        model.extractor.conv1.copyparams(base.conv1)
+        model.extractor.res2.copyparams(base.res2)
+        model.extractor.res3.copyparams(base.res3)
+        model.extractor.res4.copyparams(base.res4)
+        model.extractor.res5.copyparams(base.res5)
     train_chain = create_mnbn_model(TrainChain(model), comm)
     model = train_chain.model
     if device >= 0:

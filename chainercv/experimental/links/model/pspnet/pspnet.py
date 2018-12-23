@@ -85,29 +85,35 @@ class DilatedResNet(PickableSequentialChain):
 
         super(DilatedResNet, self).__init__()
         with self.init_scope():
-            self.conv1_1 = Conv2DBNActiv(
-                None, 64, 3, 2, 1, 1, initialW=initialW)
-            self.conv1_2 = Conv2DBNActiv(
-                64, 64, 3, 1, 1, 1, initialW=initialW)
-            self.conv1_3 = Conv2DBNActiv(
-                64, 128, 3, 1, 1, 1, initialW=initialW)
-            self.pool1 = lambda x: F.max_pooling_2d(
-                x, ksize=3, stride=2, pad=1)
+            if False:
+                self.conv1_1 = Conv2DBNActiv(
+                    None, 64, 3, 2, 1, 1, initialW=initialW)
+                self.conv1_2 = Conv2DBNActiv(
+                    64, 64, 3, 1, 1, 1, initialW=initialW)
+                self.conv1_3 = Conv2DBNActiv(
+                    64, 128, 3, 1, 1, 1, initialW=initialW)
+                self.pool1 = lambda x: F.max_pooling_2d(
+                    x, ksize=3, stride=2, pad=1)
+            else:
+                self.conv1 = Conv2DBNActiv(
+                    None, 64, 7, 2, 3, initialW=initialW)
+                self.pool1 = lambda x: F.max_pooling_2d(
+                    x, ksize=3, stride=2)
             self.res2 = ResBlock(
-                n_block[0], 128, 64, 256, 1, 1,
+                n_block[0], None, 64, 256, stride=1, dilate=1,
                 initialW=initialW, stride_first=False)
             self.res3 = ResBlock(
-                n_block[1], 256, 128, 512, 2, 1,
+                n_block[1], None, 128, 512, stride=2, dilate=1,
                 initialW=initialW, stride_first=False)
             self.res4 = ResBlock(
-                n_block[2], 512, 256, 1024, 1, 2,
+                n_block[2], None, 256, 1024, stride=1, dilate=2,
                 initialW=initialW, stride_first=False)
             self.res5 = ResBlock(
-                n_block[3], 1024, 512, 2048, 1, 4,
+                n_block[3], None, 512, 2048, stride=1, dilate=4,
                 initialW=initialW, stride_first=False)
 
-        if path:
-            chainer.serializers.load_npz(path, self, ignore_names=None)
+        # if path:
+        #     chainer.serializers.load_npz(path, self, ignore_names=None)
 
 
 class PSPNet(chainer.Chain):
