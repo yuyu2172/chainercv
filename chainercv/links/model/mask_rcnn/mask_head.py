@@ -297,16 +297,14 @@ def mask_loss_post(segms, mask_roi_indices, gt_segms, gt_mask_labels,
     gt_segms = xp.vstack(gt_segms).astype(np.float32, copy=False)
     gt_mask_labels = xp.hstack(gt_mask_labels).astype(np.int32)
 
-    mask_loss = 0
-    for i in np.unique(cuda.to_cpu(mask_roi_indices)):
-        index = (mask_roi_indices == i).nonzero()[0]
-        gt_segm = gt_segms[index]
-        gt_mask_label = gt_mask_labels[index]
+    # mask_loss = 0
+    # for i in np.unique(cuda.to_cpu(mask_roi_indices)):
+    # index = (mask_roi_indices == i).nonzero()[0]
+    # gt_segm = gt_segms[index]
+    # gt_mask_label = gt_mask_labels[index]
 
-        mask_loss += F.sigmoid_cross_entropy(
-            segms[index, gt_mask_label], gt_segm.astype(np.int32))
-
-    mask_loss /= batchsize
+    mask_loss = F.sigmoid_cross_entropy(
+        segms[:, gt_mask_labels], gt_segms.astype(np.int32))
     return mask_loss
 
 
