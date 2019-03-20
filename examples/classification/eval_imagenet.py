@@ -9,6 +9,7 @@ from chainer import iterators
 from chainercv.datasets import directory_parsing_label_names
 from chainercv.datasets import DirectoryParsingLabelDataset
 from chainercv.links import FeaturePredictor
+from chainercv.links import MobileNetV2
 from chainercv.links import ResNet101
 from chainercv.links import ResNet152
 from chainercv.links import ResNet50
@@ -28,11 +29,10 @@ def main():
         description='Learning convnet from ILSVRC2012 dataset')
     parser.add_argument('val', help='Path to root of the validation dataset')
     parser.add_argument(
-        '--model', choices=(
-            'vgg16',
-            'resnet50', 'resnet101', 'resnet152',
-            'se-resnet50', 'se-resnet101', 'se-resnet152',
-            'se-resnext50', 'se-resnext101'))
+        '--model',
+        choices=('vgg16', 'resnet50', 'resnet101', 'resnet152', 'se-resnet50',
+                 'se-resnet101', 'se-resnet152', 'se-resnext50',
+                 'se-resnext101', 'mobilenetv2'))
     parser.add_argument('--pretrained-model', default='imagenet')
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--batchsize', type=int, default=32)
@@ -44,8 +44,12 @@ def main():
     label_names = directory_parsing_label_names(args.val)
     n_class = len(label_names)
     iterator = iterators.MultiprocessIterator(
-        dataset, args.batchsize, repeat=False, shuffle=False,
-        n_processes=6, shared_mem=300000000)
+        dataset,
+        args.batchsize,
+        repeat=False,
+        shuffle=False,
+        n_processes=6,
+        shared_mem=300000000)
 
     if args.model == 'vgg16':
         extractor = VGG16(n_class, args.pretrained_model)
@@ -68,6 +72,9 @@ def main():
         extractor = SEResNeXt50(n_class, args.pretrained_model)
     elif args.model == 'se-resnext101':
         extractor = SEResNeXt101(n_class, args.pretrained_model)
+    elif args.model == 'mobilenetv2':
+        extractor = MobileNetV2(
+            n_class, args.pretrained_model, thousand_categories_mode=True)
     model = FeaturePredictor(
         extractor, crop_size=224, scale_size=256, crop=args.crop)
 
