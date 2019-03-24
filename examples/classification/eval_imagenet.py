@@ -32,7 +32,7 @@ def main():
         '--model',
         choices=('vgg16', 'resnet50', 'resnet101', 'resnet152', 'se-resnet50',
                  'se-resnet101', 'se-resnet152', 'se-resnext50',
-                 'se-resnext101', 'mobilenetv2'))
+                 'se-resnext101', 'mobilenet-v2'))
     parser.add_argument('--pretrained-model', default='imagenet')
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--batchsize', type=int, default=32)
@@ -72,7 +72,7 @@ def main():
         extractor = SEResNeXt50(n_class, args.pretrained_model)
     elif args.model == 'se-resnext101':
         extractor = SEResNeXt101(n_class, args.pretrained_model)
-    elif args.model == 'mobilenetv2':
+    elif args.model == 'mobilenet-v2':
         extractor = MobileNetV2(
             n_class, args.pretrained_model, thousand_categories_mode=True)
     model = FeaturePredictor(
