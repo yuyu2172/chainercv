@@ -11,6 +11,7 @@ from chainercv.links.model.deeplab import DeepLabV3plusXception65  # NOQA
 from chainercv.links.model.faster_rcnn.faster_rcnn_vgg import FasterRCNNVGG16  # NOQA
 from chainercv.links.model.fpn.faster_rcnn_fpn_resnet import FasterRCNNFPNResNet101  # NOQA
 from chainercv.links.model.fpn.faster_rcnn_fpn_resnet import FasterRCNNFPNResNet50  # NOQA
+from chainercv.links.model.mobilenet import MobileNetV2  # NOQA
 from chainercv.links.model.resnet import ResNet101  # NOQA
 from chainercv.links.model.resnet import ResNet152  # NOQA
 from chainercv.links.model.resnet import ResNet50  # NOQA
@@ -25,4 +26,3 @@ from chainercv.links.model.ssd import SSD512  # NOQA
 from chainercv.links.model.vgg import VGG16  # NOQA
 from chainercv.links.model.yolo import YOLOv2  # NOQA
 from chainercv.links.model.yolo import YOLOv3  # NOQA
-from chainercv.links.model.mobilenet import MobileNetV2  # NOQA
