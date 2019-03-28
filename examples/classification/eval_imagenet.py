@@ -44,12 +44,8 @@ def main():
     label_names = directory_parsing_label_names(args.val)
     n_class = len(label_names)
     iterator = iterators.MultiprocessIterator(
-        dataset,
-        args.batchsize,
-        repeat=False,
-        shuffle=False,
-        n_processes=6,
-        shared_mem=300000000)
+        dataset, args.batchsize, repeat=False, shuffle=False,
+        n_processes=6, shared_mem=300000000)
 
     if args.model == 'vgg16':
         extractor = VGG16(n_class, args.pretrained_model)
