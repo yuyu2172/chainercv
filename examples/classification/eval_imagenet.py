@@ -70,7 +70,7 @@ def main():
         extractor = SEResNeXt101(n_class, args.pretrained_model)
     elif args.model == 'mobilenet_v2':
         extractor = MobileNetV2(
-            n_class, args.pretrained_model, thousand_categories_mode=True)
+            1 + n_class, args.pretrained_model, thousand_categories_mode=True)
     model = FeaturePredictor(
         extractor, crop_size=224, scale_size=256, crop=args.crop)
 
